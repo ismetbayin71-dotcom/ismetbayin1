@@ -1,40 +1,44 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
+    <meta charset="UTF-8">
     <title>Online Yılan Savaşı</title>
     <style>
-        body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; overflow: hidden; }
-        canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        #status { font-size: 20px; margin: 10px; color: #2ecc71; }
+        body { background: #1a1a1a; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+        canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 30px rgba(0,0,0,0.7); margin-top: 20px; }
+        #status { font-size: 22px; margin: 15px; color: #2ecc71; font-weight: bold; }
+        .info { color: #888; margin-top: 10px; }
     </style>
 </head>
 <body>
     <h1>Online Yılan Savaşı</h1>
     <div id="status">Bağlanılıyor...</div>
     <canvas id="gameCanvas" width="400" height="400"></canvas>
-    <p>Ok tuşlarıyla hareket et. Arkadaşına bu linki gönder!</p>
+    <div class="info">Ok tuşlarıyla hareket et. Arkadaşına linki gönder!</div>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
     <script>
-        // Senin Firebase Bilgilerin
+        // Senin Güncel Firebase Bilgilerin
         const firebaseConfig = {
             apiKey: "AIzaSyBktCn2NgiO0zWrZCSHLsjTXvhkNRDNSi4",
             authDomain: "snake-e0eac.firebaseapp.com",
-            databaseURL: "databaseURL: "https://snake-e0eac-default-rtdb.europe-west1.firebasedatabase.app",", // Bunu ekledim
+            // Belçika sunucusu için tam adres:
+            databaseURL: "https://snake-e0eac-default-rtdb.europe-west1.firebasedatabase.app",
             projectId: "snake-e0eac",
             storageBucket: "snake-e0eac.firebasestorage.app",
             messagingSenderId: "788073914029",
-            appId: "1:788073914029:web:dd7fcb83d11483ef31f024",
-            measurementId: "G-NPX75M948N"
+            appId: "1:788073914029:web:dd7fcb83d11483ef31f024"
         };
 
+        // Firebase Başlatma
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
+        // Benzersiz oyuncu ID'si ve rastgele renk
         const myId = Math.random().toString(36).substring(7);
-        let players = {};
+        const myColor = '#' + Math.floor(Math.random()*16777215).toString(16);
         
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -42,54 +46,60 @@
 
         let myData = {
             id: myId,
-            x: Math.floor(Math.random() * 15) + 2,
-            y: Math.floor(Math.random() * 15) + 2,
-            color: '#' + Math.floor(Math.random()*16777215).toString(16)
+            x: Math.floor(Math.random() * 18) + 1,
+            y: Math.floor(Math.random() * 18) + 1,
+            color: myColor
         };
 
+        // Oyuncu referansı ve bağlantı koptuğunda silme
         const playerRef = db.ref('players/' + myId);
         playerRef.set(myData);
         playerRef.onDisconnect().remove();
 
+        // Diğer oyuncuları anlık dinle
         db.ref('players').on('value', (snapshot) => {
-            players = snapshot.val() || {};
+            const players = snapshot.val() || {};
             const count = Object.keys(players).length;
-            status.innerText = "Online Oyuncu: " + count + (count > 1 ? " (Arkadaşın Bağlandı!)" : " (Bekleniyor...)");
-            draw();
+            
+            if(count > 0) {
+                status.innerText = "Online Oyuncu: " + count + (count > 1 ? " (Arkadaşınla Kapış!)" : " (Bekleniyor...)");
+            }
+            draw(players);
         });
 
+        // Hareket Kontrolü
         document.addEventListener("keydown", e => {
-            if(e.key === "ArrowUp") myData.y--;
-            if(e.key === "ArrowDown") myData.y++;
-            if(e.key === "ArrowLeft") myData.x--;
-            if(e.key === "ArrowRight") myData.x++;
+            let moved = false;
+            if(e.key === "ArrowUp" && myData.y > 0) { myData.y--; moved = true; }
+            if(e.key === "ArrowDown" && myData.y < 19) { myData.y++; moved = true; }
+            if(e.key === "ArrowLeft" && myData.x > 0) { myData.x--; moved = true; }
+            if(e.key === "ArrowRight" && myData.x < 19) { myData.x++; moved = true; }
             
-            // Sınırları kontrol et
-            if(myData.x < 0) myData.x = 0;
-            if(myData.y < 0) myData.y = 0;
-            if(myData.x > 19) myData.x = 19;
-            if(myData.y > 19) myData.y = 19;
-            
-            playerRef.set(myData);
+            if(moved) {
+                playerRef.set(myData);
+            }
         });
 
-        function draw() {
+        function draw(players) {
+            // Ekranı temizle
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Izgara çiz (isteğe bağlı, daha profesyonel durur)
-            ctx.strokeStyle = "#222";
+            // Izgara çizgileri
+            ctx.strokeStyle = "#111";
             for(let i=0; i<400; i+=20) {
                 ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
                 ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
             }
 
+            // Tüm oyuncuları çiz
             Object.values(players).forEach(p => {
                 ctx.fillStyle = p.color;
-                ctx.shadowBlur = 10;
+                // Yılan kafasına parlama efekti
+                ctx.shadowBlur = 15;
                 ctx.shadowColor = p.color;
-                ctx.fillRect(p.x * 20, p.y * 20, 18, 18);
-                ctx.shadowBlur = 0; // Diğer çizimler için gölgeyi sıfırla
+                ctx.fillRect(p.x * 20, p.y * 20, 19, 19);
+                ctx.shadowBlur = 0;
             });
         }
     </script>
