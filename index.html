@@ -2,33 +2,40 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Final Fix</title>
+    <title>Snake Royale - Clean & Fixed</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        #login-view { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
-        #lobby-view { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; display: none; }
-        #game-screen { display: none; position: relative; flex-direction: row; gap: 20px; }
+        
+        /* EKRAN YÖNETİMİ */
+        .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
+        #login-view { display: block; } /* Sadece login açık başlar */
+        
+        #game-screen { background: transparent; border: none; width: auto; box-shadow: none; display: none; flex-direction: row; gap: 20px; }
+        
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
+        
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
         .player-item { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-        .alive { color: #2ecc71; font-weight: bold; }
-        .dead { color: #ff4757; text-decoration: line-through; opacity: 0.6; }
+        .alive { color: #2ecc71; font-weight: bold; margin-bottom: 5px; }
+        .dead { color: #ff4757; text-decoration: line-through; opacity: 0.6; margin-bottom: 5px; }
+        
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; }
+        
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button.start-btn { background: #2ecc71; display: none; }
     </style>
 </head>
 <body>
 
-    <div id="login-view">
+    <div id="login-view" class="screen">
         <h2>Snake Royale</h2>
         <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12">
         <div>Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
         <button onclick="joinLobby()">Giriş Yap</button>
     </div>
 
-    <div id="lobby-view">
+    <div id="lobby-view" class="screen">
         <h3>Oda Lobisi</h3>
         <div id="player-list"></div>
         <button id="hostStartBtn" class="start-btn" onclick="requestStart()">OYUNU BAŞLAT</button>
@@ -79,21 +86,16 @@
             myData.name = name;
             myData.color = document.getElementById("colorInput").value;
 
+            // Ekran geçişini net yapalım
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
 
-            // KRİTİK: Sadece geçerli oyuncuları say
             db.ref('players').once('value', snap => {
-                const rawData = snap.val() || {};
-                const validPlayers = Object.values(rawData).filter(p => p.name); // Sadece ismi olanları say
+                const data = snap.val() || {};
+                const validPlayers = Object.values(data).filter(p => p.name);
 
                 if(validPlayers.length === 0) {
-                    // Oda gerçekten boşsa her şeyi temizle
-                    db.ref('/').set({ 
-                        'game/state': { status: "waiting" },
-                        'game/foods': null,
-                        'players': null 
-                    }).then(() => {
+                    db.ref('/').set({ 'game/state': { status: "waiting" }, 'game/foods': null, 'players': null }).then(() => {
                         registerMe(true);
                     });
                 } else {
@@ -118,14 +120,10 @@
             resetFoods();
         }
 
-        // VERİ DİNLEME VE FİLTRELEME
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
-            // SADECE İSMİ OLANLARI AL (Hayaletleri temizle)
             allPlayers = {};
-            Object.keys(data).forEach(key => {
-                if(data[key].name) allPlayers[key] = data[key];
-            });
+            Object.keys(data).forEach(key => { if(data[key].name) allPlayers[key] = data[key]; });
             updateLobbyList();
             updateSidebar();
         });
@@ -175,13 +173,13 @@
             const playersArr = Object.keys(allPlayers).sort();
             const myIndex = playersArr.indexOf(myId);
             const totalPlayers = playersArr.length;
-            const angle = (myIndex / totalPlayers) * Math.PI * 2;
+            const angle = (myIndex / (totalPlayers || 1)) * Math.PI * 2;
             const radius = 10;
             const centerX = tileCount / 2;
             const centerY = tileCount / 2;
             myData.x = Math.floor(centerX + Math.cos(angle) * radius);
             myData.y = Math.floor(centerY + Math.sin(angle) * radius);
-            if (myData.x < centerX) myData.dx = 1; else myData.dx = -1;
+            myData.dx = (myData.x < centerX) ? 1 : -1;
             myData.dy = 0;
             myData.isDead = false;
             myData.maxLength = 3;
@@ -203,6 +201,7 @@
                 if(myData.x >= tileCount) myData.x = 0;
                 if(myData.y < 0) myData.y = tileCount - 1;
                 if(myData.y >= tileCount) myData.y = 0;
+                
                 Object.values(allPlayers).forEach(p => {
                     if(!p.tail || p.isDead) return;
                     p.tail.forEach(seg => {
@@ -211,6 +210,7 @@
                         }
                     });
                 });
+                
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
@@ -219,6 +219,7 @@
                         db.ref('game/foods').set(newFoods);
                     }
                 });
+                
                 myData.tail.unshift({x: myData.x, y: myData.y});
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
@@ -227,7 +228,6 @@
         }, 130);
 
         function die() { myData.isDead = true; db.ref('players/' + myId).update({ isDead: true }); }
-
         function resetFoods() {
             let f = [];
             for(let i=0; i<5; i++) f.push({x: Math.floor(Math.random()*tileCount), y: Math.floor(Math.random()*tileCount)});
@@ -243,6 +243,7 @@
             }
             ctx.fillStyle = "#ff4757";
             foods.forEach(f => { ctx.beginPath(); ctx.arc(f.x*grid+10, f.y*grid+10, 8, 0, Math.PI*2); ctx.fill(); });
+            
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
                 p.tail.forEach((seg, i) => {
@@ -254,10 +255,6 @@
                     }
                 });
             });
-            if(myData.isDead && gameStatus === "playing") {
-                ctx.fillStyle = "rgba(255, 71, 87, 0.5)"; ctx.font = "30px Arial"; ctx.textAlign = "center";
-                ctx.fillText("İZLEYİCİ MODU", canvas.width/2, 50);
-            }
         }
     </script>
 </body>
