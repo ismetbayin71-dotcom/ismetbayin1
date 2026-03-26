@@ -2,19 +2,28 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Pro Edition</title>
+    <title>Snake Royale - Fixed Lobby</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        #lobby-container { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        
+        /* GİRİŞ EKRANI - HER ZAMAN İLK BU GÖRÜNECEK */
+        #login-view { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: block; }
+        
+        /* LOBİ EKRANI */
+        #lobby-view { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; display: none; }
+        
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
         #player-list { text-align: left; background: #151515; padding: 15px; border-radius: 10px; margin: 20px 0; max-height: 200px; overflow-y: auto; }
         .player-item { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+
+        /* OYUN EKRANI */
         #game-screen { display: none; position: relative; flex-direction: row; gap: 20px; }
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
         .alive { color: #2ecc71; font-weight: bold; margin-bottom: 5px; }
         .dead { color: #ff4757; text-decoration: line-through; opacity: 0.6; margin-bottom: 5px; }
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; text-shadow: 0 0 30px rgba(0,0,0,1); z-index: 100; pointer-events: none; }
+        
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button:hover { background: #2980b9; }
         button.start-btn { background: #2ecc71; display: none; }
@@ -22,18 +31,18 @@
 </head>
 <body>
 
-    <div id="lobby-container">
-        <div id="login-view">
-            <h2>Snake Royale</h2>
-            <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12">
-            <div>Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
-            <button onclick="joinLobby()">Lobiye Gir</button>
-        </div>
-        <div id="lobby-view" style="display: none;">
-            <h3>Oda Lobisi</h3>
-            <div id="player-list"></div>
-            <button id="hostStartBtn" class="start-btn" onclick="requestStart()">OYUNU BAŞLAT</button>
-        </div>
+    <div id="login-view">
+        <h2>Snake Royale</h2>
+        <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12">
+        <div>Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
+        <button onclick="joinLobby()">Giriş Yap</button>
+    </div>
+
+    <div id="lobby-view">
+        <h3>Oda Lobisi</h3>
+        <div id="player-list"></div>
+        <button id="hostStartBtn" class="start-btn" onclick="requestStart()">OYUNU BAŞLAT</button>
+        <p id="waitMsg" style="color:#888; font-size:12px;">Hostun oyunu başlatması bekleniyor...</p>
     </div>
 
     <div id="game-screen">
@@ -74,24 +83,32 @@
         const grid = 20;
         const tileCount = 30;
 
+        // LOBİYE KATILMA FONKSİYONU
         function joinLobby() {
             const name = document.getElementById("usernameInput").value;
-            if(!name) return alert("İsim yaz!");
+            if(!name) return alert("Lütfen bir isim girin!");
+
             myData.name = name;
             myData.color = document.getElementById("colorInput").value;
+
+            // Görünümü Değiştir
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
-            
+
+            // Firebase Kayıt
             const playerRef = db.ref('players/' + myId);
             playerRef.set(myData);
             playerRef.onDisconnect().remove();
 
+            // Host Kontrolü ve State Sıfırlama
             db.ref('players').once('value', snap => {
-                if(Object.keys(snap.val() || {}).length === 1) {
+                const players = snap.val() || {};
+                if(Object.keys(players).length === 1) {
                     myData.isHost = true;
                     playerRef.update({ isHost: true });
+                    db.ref('game/state').set({ status: "waiting" }); // Oda boşsa durumu sıfırla
                     document.getElementById("hostStartBtn").style.display = "block";
-                    db.ref('game/state').set({ status: "waiting" });
+                    document.getElementById("waitMsg").style.display = "none";
                 }
             });
         }
@@ -101,6 +118,7 @@
             resetFoods();
         }
 
+        // VERİ DİNLEYİCİLER
         db.ref('players').on('value', snap => {
             allPlayers = snap.val() || {};
             updateLobbyList();
@@ -109,8 +127,13 @@
 
         db.ref('game/state').on('value', snap => {
             const state = snap.val();
-            if(state && state.status === "counting" && gameStatus === "waiting") startCountdown();
-            if(state && state.status === "waiting") gameStatus = "waiting";
+            if(!state) return;
+            
+            // Eğer oyun başladıysa ve ben daha lobiye bile girmediysem (Login ekranındaysam) hiçbir şey yapma
+            if(document.getElementById("login-view").style.display === "block") return;
+
+            if(state.status === "counting" && gameStatus === "waiting") startCountdown();
+            if(state.status === "waiting") gameStatus = "waiting";
         });
 
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
@@ -119,7 +142,7 @@
             const list = document.getElementById("player-list");
             list.innerHTML = "";
             Object.values(allPlayers).forEach(p => {
-                list.innerHTML += `<div class="player-item"><span>${p.isHost ? '👑' : ''} ${p.name}</span> <div style="width:20px; height:20px; background:${p.color};"></div></div>`;
+                list.innerHTML += `<div class="player-item"><span>${p.isHost ? '👑' : ''} ${p.name}</span> <div style="width:20px; height:20px; background:${p.color}; border-radius:3px;"></div></div>`;
             });
         }
 
@@ -133,10 +156,10 @@
 
         function startCountdown() {
             gameStatus = "counting";
-            document.getElementById("lobby-container").style.display = "none";
+            document.getElementById("lobby-view").style.display = "none";
             document.getElementById("game-screen").style.display = "flex";
             
-            calculateSpawnPosition(); // Dengeli dağılım hesapla
+            calculateSpawnPosition();
             db.ref('players/' + myId).set(myData);
 
             const cdDiv = document.getElementById("countdown");
@@ -149,25 +172,18 @@
             }, 1000);
         }
 
-        // DENGELİ DAĞILIM ALGORİTMASI
         function calculateSpawnPosition() {
             const playersArr = Object.keys(allPlayers).sort();
             const myIndex = playersArr.indexOf(myId);
             const totalPlayers = playersArr.length;
-            
-            // Oyuncuları harita etrafında bir çember üzerine yerleştir
             const angle = (myIndex / totalPlayers) * Math.PI * 2;
-            const radius = 10; // Merkezden uzaklık
+            const radius = 10;
             const centerX = tileCount / 2;
             const centerY = tileCount / 2;
-
             myData.x = Math.floor(centerX + Math.cos(angle) * radius);
             myData.y = Math.floor(centerY + Math.sin(angle) * radius);
-            
-            // Merkeze doğru bakarak başla
             if (myData.x < centerX) myData.dx = 1; else myData.dx = -1;
             myData.dy = 0;
-
             myData.isDead = false;
             myData.maxLength = 3;
             myData.tail = [{x: myData.x, y: myData.y}];
@@ -184,14 +200,10 @@
         setInterval(() => {
             if(gameStatus === "playing" && !myData.isDead) {
                 myData.x += myData.dx; myData.y += myData.dy;
-
-                // SONSUZ HARİTA (Kenardan çıkma)
                 if(myData.x < 0) myData.x = tileCount - 1;
                 if(myData.x >= tileCount) myData.x = 0;
                 if(myData.y < 0) myData.y = tileCount - 1;
                 if(myData.y >= tileCount) myData.y = 0;
-
-                // Çarpışma
                 Object.values(allPlayers).forEach(p => {
                     if(!p.tail || p.isDead) return;
                     p.tail.forEach(seg => {
@@ -200,8 +212,6 @@
                         }
                     });
                 });
-
-                // Yemek
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
@@ -210,7 +220,6 @@
                         db.ref('game/foods').set(newFoods);
                     }
                 });
-
                 myData.tail.unshift({x: myData.x, y: myData.y});
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
@@ -235,7 +244,6 @@
             }
             ctx.fillStyle = "#ff4757";
             foods.forEach(f => { ctx.beginPath(); ctx.arc(f.x*grid+10, f.y*grid+10, 8, 0, Math.PI*2); ctx.fill(); });
-
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
                 p.tail.forEach((seg, i) => {
