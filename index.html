@@ -2,34 +2,25 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Boss Edition</title>
+    <title>Snake Royale - Boss & Apples Edition</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
         #login-view { display: block; } 
-        
         #game-screen { background: transparent; border: none; width: auto; box-shadow: none; display: none; flex-direction: row; gap: 20px; position: relative; }
-        
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
-        
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
         .player-item { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-        
         #boss-timer-display { color: #e74c3c; font-weight: bold; font-size: 18px; margin-top: 15px; padding: 10px; background: rgba(231, 76, 60, 0.1); border-radius: 5px; text-align: center; }
-
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; text-shadow: 0 0 30px rgba(0,0,0,1); }
-        
         #victory-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; animation: fadeInVictory 0.5s; }
         #victory-image { width: 300px; height: auto; margin-bottom: 20px; border-radius: 15px; box-shadow: 0 0 30px rgba(241, 196, 15, 0.5); z-index: 210; }
         #winner-name { color: #2ecc71; font-size: 60px; z-index: 210; }
         #praise-text { font-size: 80px; font-weight: bold; color: #e74c3c; position: absolute; top: 20%; text-shadow: 0 0 20px rgba(231, 76, 60, 0.5); opacity: 0; z-index: 220; animation: praisePop 1s ease-out forwards 1.5s; }
-        
         @keyframes praisePop { 0% { opacity: 0; transform: scale(0.5) translateY(50px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
         .firework-particle { position: absolute; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; z-index: 205; animation: fireworkSparkle 1.5s ease-out forwards; }
         @keyframes fireworkSparkle { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; } }
-        
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button#readyBtn.ready-on { background: #2ecc71; }
     </style>
@@ -96,7 +87,6 @@
         const grid = 20;
         const tileCount = 30;
 
-        // BOSS AYARLARI
         const bossImg = new Image();
         bossImg.src = 'boss.png'; 
         let bossData = { active: false, x: 13, y: -6, dx: 0, dy: 1, tail: [], maxLength: 10, timer: 15 };
@@ -108,8 +98,10 @@
             myData.color = document.getElementById("colorInput").value;
             
             db.ref('players').once('value', snap => {
+                // Eğer kimse yoksa oyunu temizle ve ilk elmaları koy
                 if (snap.numChildren() === 0) {
                     db.ref('/').update({ 'game/state': { status: "waiting", winner: "", bossTimer: 15 } });
+                    resetFoods(); 
                 }
                 completeJoin();
             });
@@ -142,7 +134,10 @@
             updateSidebarUI();
 
             if(localInLobby && total >= 1 && ready === total && gameStatus === "waiting") {
-                if(myId === Object.keys(allPlayers).sort()[0]) db.ref('game/state').update({ status: "counting" });
+                if(myId === Object.keys(allPlayers).sort()[0]) {
+                    db.ref('game/state').update({ status: "counting" });
+                    resetFoods(); // Oyun başlarken elmaları tazele
+                }
             }
 
             if(gameStatus === "playing" && total > 1 && alive === 1) {
@@ -161,6 +156,7 @@
             }
         });
 
+        // ELMALARI VERİTABANINDAN ÇEKME (ÖNEMLİ!)
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
 
         function startCountdown() {
@@ -192,22 +188,19 @@
 
         setInterval(() => {
             if(gameStatus === "playing" && !myData.isDead) {
-                // Oyuncu Hareketi
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
 
-                // Boss Hareketi ve Çarpışma
                 if(bossData.timer <= 0) moveBoss();
-
-                // Çarpışma Kontrolleri
                 checkCollisions();
 
-                // Yemek Yeme
+                // Yemek Yeme Kontrolü
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
-                        let n = [...foods]; n[i] = {x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)};
-                        db.ref('game/foods').set(n);
+                        let n = [...foods]; 
+                        n[i] = {x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)};
+                        db.ref('game/foods').set(n); // Yeni elmayı veritabanına yaz
                     }
                 });
 
@@ -226,8 +219,6 @@
                 bossData.dx = d.x; bossData.dy = d.y;
             }
             bossData.x += bossData.dx; bossData.y += bossData.dy;
-            
-            // Sınırda kalma
             if(bossData.x < 0) bossData.x = 0; if(bossData.x > 25) bossData.x = 25;
             if(bossData.y < 0) bossData.y = 0; if(bossData.y > 25) bossData.y = 25;
 
@@ -236,12 +227,10 @@
         }
 
         function checkCollisions() {
-            // Boss Çarpışması (5x5 Kafa)
             if(bossData.active) {
                 if(myData.x >= bossData.x && myData.x < bossData.x+5 && myData.y >= bossData.y && myData.y < bossData.y+5) die();
                 bossData.tail.forEach(t => { if(myData.x === t.x && myData.y === t.y) die(); });
             }
-            // Diğer oyuncular
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
                 p.tail.forEach(seg => { if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); });
@@ -250,11 +239,8 @@
 
         function draw() {
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Kapı Çizimi
-            ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8);
+            ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8); // Kapı
 
-            // Boss Çizimi
             if(bossData.active) {
                 ctx.fillStyle = "rgba(255,0,0,0.4)";
                 bossData.tail.forEach(t => ctx.fillRect(t.x*grid, t.y*grid, grid-1, grid-1));
@@ -262,8 +248,10 @@
                 else { ctx.fillStyle = "red"; ctx.fillRect(bossData.x*grid, bossData.y*grid, grid*5, grid*5); }
             }
 
-            // Yemekler ve Oyuncular
-            ctx.fillStyle = "#ff4757"; foods.forEach(f=>ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
+            // ELMALARI ÇİZ (KIRMIZI RENK)
+            ctx.fillStyle = "#ff4757"; 
+            foods.forEach(f => ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
+
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
                 p.tail.forEach((seg, i) => {
@@ -322,7 +310,8 @@
         }
 
         function resetFoods() {
-            let f = []; for(let i=0;i<8;i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
+            let f = []; 
+            for(let i=0; i<8; i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
             db.ref('game/foods').set(f);
         }
 
