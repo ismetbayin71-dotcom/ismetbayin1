@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Müdür Edition</title>
+    <title>Snake Royale - Müdür Edition Fix</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -59,7 +59,7 @@
     </div>
 
     <div id="victory-screen">
-        <div id="praise-text" style="font-size:80px; color:#e74c3c;">e çok iyi</div> 
+        <div id="praise-text" style="font-size:80px; color:#e74c3c; font-weight:bold;">e çok iyi</div> 
         <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s" style="width:200px;">
         <div id="winner-name">...</div>
         <p style="color:#aaa;">Lobiye dönülüyor...</p>
@@ -97,6 +97,7 @@
         const bossImg = new Image();
         bossImg.src = 'boss.png'; 
         let bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, tail: [], maxLength: 15, timer: 15, state: "waiting", stayTimer: 15 };
+        let bossInterval = null; // Kilit Zamanlayıcı
 
         function joinLobby() {
             const nameInput = document.getElementById("usernameInput");
@@ -160,7 +161,7 @@
                         tension.style.display = "block";
                     } else { tension.style.display = "none"; }
                 } else { 
-                    display.innerText = "MÜDÜR SAHADA!";
+                    display.innerText = "MÜDÜR GELDİ!"; // İstenen metin değişimi
                     tension.style.display = "none";
                 }
             }
@@ -187,11 +188,15 @@
             }, 1000);
         }
 
-        // MÜDÜR DÖNGÜSÜ
+        // MÜDÜR DÖNGÜSÜ KİLİT SİSTEMLİ
         function startBossLoop(startTime) {
+            if (bossInterval) clearInterval(bossInterval); // Eski çakışan sayacı çöpe at
+            
             let timeLeft = startTime;
-            const interval = setInterval(() => {
-                if(gameStatus !== "playing") { clearInterval(interval); return; }
+            db.ref('game/state').update({ bossTimer: timeLeft });
+
+            bossInterval = setInterval(() => {
+                if(gameStatus !== "playing") { clearInterval(bossInterval); return; }
                 
                 if(bossData.state === "waiting") {
                     timeLeft--;
@@ -252,7 +257,7 @@
                 if(bossData.y <= -6) {
                     bossData.state = "waiting";
                     db.ref('game/state').update({ bossActive: false, bossTimer: 60 });
-                    if(myId === Object.keys(allPlayers).sort()[0]) startBossLoop(60); // Bir dahaki geliş 1 dk sonra
+                    if(myId === Object.keys(allPlayers).sort()[0]) startBossLoop(60); // Bir dahaki gelişi 1 dk kur
                 }
             }
 
@@ -262,7 +267,6 @@
 
         function checkCollisions() {
             if(bossData.active) {
-                // Müdür kafası 5x5 alanı kaplıyor (Görseli ortaladığımız için merkez x,y)
                 if(myData.x >= bossData.x-2 && myData.x <= bossData.x+2 && myData.y >= bossData.y-2 && myData.y <= bossData.y+2) die();
                 bossData.tail.forEach(t => { if(myData.x === t.x && myData.y === t.y) die(); });
             }
@@ -277,10 +281,8 @@
             ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8); // Kapı
 
             if(bossData.active) {
-                // Kuyruğu çiz
                 ctx.fillStyle = "rgba(255,0,0,0.5)";
                 bossData.tail.forEach(t => ctx.fillRect(t.x*grid, t.y*grid, grid-1, grid-1));
-                // Müdür kafasını çiz (Ortalanmış şekilde)
                 if(bossImg.complete) {
                     ctx.drawImage(bossImg, (bossData.x - 2) * grid, (bossData.y - 2) * grid, grid * 5, grid * 5);
                 }
@@ -316,6 +318,7 @@
 
         function resetLocalData() {
             myData.isReady = false; myData.isDead = false; myData.tail = []; myData.maxLength = 3;
+            if (bossInterval) clearInterval(bossInterval); // Müdür sayacını sıfırla
             document.getElementById("readyBtn").innerText = "HAZIR DEĞİL";
             document.getElementById("readyBtn").classList.remove("ready-on");
             bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, tail: [], maxLength: 15, timer: 15, state: "waiting", stayTimer: 15 };
