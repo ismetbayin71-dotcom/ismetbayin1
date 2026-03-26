@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - No Self-Collision</title>
+    <title>Snake Royale - Pro Input System</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -68,6 +68,9 @@
         let gameStatus = "waiting";
         let localInLobby = false;
         let foods = [];
+        
+        // HAMLE KUYRUĞU İÇİN DEĞİŞKENLER
+        let inputQueue = []; 
 
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -103,9 +106,7 @@
             db.ref('players/' + myId).update({ isReady: myData.isReady });
         }
 
-        function leaveGame() {
-            db.ref('players/' + myId).remove().then(() => { window.location.reload(); });
-        }
+        function leaveGame() { db.ref('players/' + myId).remove().then(() => { window.location.reload(); }); }
 
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
@@ -164,11 +165,11 @@
         function calculateSpawnPosition() {
             const playersArr = Object.keys(allPlayers).sort();
             const myIndex = playersArr.indexOf(myId);
-            const angle = (myIndex / (playersArr.length || 1)) * Math.PI * 2;
-            myData.x = Math.floor(15 + Math.cos(angle) * 8);
-            myData.y = Math.floor(15 + Math.sin(angle) * 8);
+            myData.x = Math.floor(15 + Math.cos((myIndex/playersArr.length)*Math.PI*2) * 8);
+            myData.y = Math.floor(15 + Math.sin((myIndex/playersArr.length)*Math.PI*2) * 8);
             myData.dx = (myData.x < 15) ? 1 : -1; myData.dy = 0;
             myData.isDead = false; myData.maxLength = 3; myData.tail = [{x:myData.x, y:myData.y}];
+            inputQueue = []; // Reset queue
             db.ref('players/' + myId).set(myData);
         }
 
@@ -177,24 +178,40 @@
             db.ref('game/foods').set(f);
         }
 
-        // YÖN KONTROLÜ - 180 DERECE DÖNÜŞÜ ENGELLEYEN YER
+        // TUŞLARI KUYRUĞA ALAN YENİ SİSTEM
         document.addEventListener("keydown", e => {
             if(gameStatus !== "playing" || myData.isDead) return;
-            // Yukarı giderken (dy = -1) aşağı (dy = 1) basamazsın ve tam tersi
-            if(e.key === "ArrowUp" && myData.dy !== 1)    { myData.dx = 0; myData.dy = -1; }
-            if(e.key === "ArrowDown" && myData.dy !== -1) { myData.dx = 0; myData.dy = 1; }
-            if(e.key === "ArrowLeft" && myData.dx !== 1)  { myData.dx = -1; myData.dy = 0; }
-            if(e.key === "ArrowRight" && myData.dx !== -1) { myData.dx = 1; myData.dy = 0; }
+            const validKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+            if(validKeys.includes(e.key)) {
+                // Aynı tuşu veya zıt tuşu kuyruğa ekleme (Gereksiz hamle önleme)
+                const lastInput = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : null;
+                if (e.key !== lastInput) {
+                    inputQueue.push(e.key);
+                }
+                // Kuyruğun çok büyümesini engelle
+                if(inputQueue.length > 2) inputQueue.shift();
+            }
         });
 
         setInterval(() => {
             if(gameStatus === "playing" && !myData.isDead) {
+                // KUYRUĞU İŞLE: Her karede sadece 1 hamle yap
+                if (inputQueue.length > 0) {
+                    const nextMove = inputQueue.shift();
+                    if(nextMove === "ArrowUp" && myData.dy !== 1)    { myData.dx = 0; myData.dy = -1; }
+                    else if(nextMove === "ArrowDown" && myData.dy !== -1) { myData.dx = 0; myData.dy = 1; }
+                    else if(nextMove === "ArrowLeft" && myData.dx !== 1)  { myData.dx = -1; myData.dy = 0; }
+                    else if(nextMove === "ArrowRight" && myData.dx !== -1) { myData.dx = 1; myData.dy = 0; }
+                }
+
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
+
                 Object.values(allPlayers).forEach(p => {
                     if(!p.tail || p.isDead) return;
                     p.tail.forEach(seg => { if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); });
                 });
+
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
@@ -202,6 +219,7 @@
                         db.ref('game/foods').set(n);
                     }
                 });
+                
                 myData.tail.unshift({x:myData.x, y:myData.y});
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
