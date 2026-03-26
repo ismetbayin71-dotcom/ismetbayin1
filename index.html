@@ -2,22 +2,22 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Online Yılan Savaşı - Elmalı</title>
+    <title>Online Yılan Savaşı - Uzayan Kuyruk</title>
     <style>
         body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; margin: 0; }
         canvas { border: 5px solid #333; background: #000; margin-top: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         #ui { display: flex; justify-content: center; gap: 20px; font-size: 20px; margin: 10px; }
-        .score-box { padding: 5px 15px; border-radius: 5px; background: #333; }
+        .score-box { padding: 5px 15px; border-radius: 5px; background: #333; border-left: 5px solid #2ecc71; }
     </style>
 </head>
 <body>
     <h1>Online Yılan Savaşı</h1>
     <div id="ui">
         <div id="status" class="score-box">Bağlanılıyor...</div>
-        <div class="score-box">Skorun: <span id="myScore">0</span></div>
+        <div class="score-box">Boyun: <span id="myScore">1</span></div>
     </div>
     <canvas id="gameCanvas" width="400" height="400"></canvas>
-    <p>Ok tuşlarıyla yön ver. Elmayı kap, puanı kazan!</p>
+    <p>Elmaları topla, kuyruğunu uzat ve arkadaşınla yarış!</p>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
@@ -43,7 +43,16 @@
         const status = document.getElementById("status");
         const scoreDisplay = document.getElementById("myScore");
 
-        let myData = { id: myId, x: 10, y: 10, dx: 1, dy: 0, color: myColor, score: 0 };
+        // Yılan verisi: tail dizisi artık tüm vücut koordinatlarını tutuyor
+        let myData = {
+            id: myId,
+            x: 10, y: 10,
+            dx: 1, dy: 0,
+            color: myColor,
+            tail: [{x: 10, y: 10}],
+            maxLength: 3 // Başlangıç uzunluğu
+        };
+
         let food = { x: 5, y: 5 };
         let allPlayers = {};
 
@@ -52,19 +61,16 @@
 
         playerRef.onDisconnect().remove();
 
-        // Veritabanını dinle (Oyuncular)
         db.ref('players').on('value', (snapshot) => {
             allPlayers = snapshot.val() || {};
             status.innerText = "Online: " + Object.keys(allPlayers).length;
         });
 
-        // Veritabanını dinle (Yiyecek)
         foodRef.on('value', (snapshot) => {
             const newFood = snapshot.val();
             if (newFood) food = newFood;
         });
 
-        // Klavye Kontrolü
         document.addEventListener("keydown", e => {
             if(e.key === "ArrowUp" && myData.dy === 0) { myData.dx = 0; myData.dy = -1; }
             if(e.key === "ArrowDown" && myData.dy === 0) { myData.dx = 0; myData.dy = 1; }
@@ -81,18 +87,27 @@
 
         // Oyun Döngüsü
         setInterval(() => {
+            // Yeni kafa pozisyonu
             myData.x += myData.dx;
             myData.y += myData.dy;
 
-            // Ekran dışı kontrolü
+            // Ekran sınırları
             if(myData.x < 0) myData.x = 19; if(myData.x > 19) myData.x = 0;
             if(myData.y < 0) myData.y = 19; if(myData.y > 19) myData.y = 0;
 
-            // Yiyecek yeme kontrolü
+            // Yeni kafayı kuyruğun başına ekle
+            myData.tail.unshift({x: myData.x, y: myData.y});
+
+            // Yiyecek kontrolü
             if(myData.x === food.x && myData.y === food.y) {
-                myData.score += 10;
-                scoreDisplay.innerText = myData.score;
-                spawnFood(); // Yeni yiyecek konumunu Firebase'e gönder
+                myData.maxLength++;
+                scoreDisplay.innerText = myData.maxLength;
+                spawnFood();
+            }
+
+            // Kuyruğu sınırla (uzunluk kontrolü)
+            while(myData.tail.length > myData.maxLength) {
+                myData.tail.pop();
             }
 
             playerRef.set(myData);
@@ -110,16 +125,21 @@
                 ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
             }
 
-            // Yiyecek (Elma)
+            // Elma çizimi
             ctx.fillStyle = "#ff4757";
             ctx.beginPath();
             ctx.arc(food.x * 20 + 10, food.y * 20 + 10, 8, 0, Math.PI * 2);
             ctx.fill();
 
-            // Oyuncular
+            // Tüm oyuncuların tüm kuyruklarını çiz
             Object.values(allPlayers).forEach(p => {
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x * 20 + 1, p.y * 20 + 1, 18, 18);
+                if(p.tail) {
+                    p.tail.forEach((segment, index) => {
+                        // Kafa kısmı biraz daha parlak olsun
+                        ctx.fillStyle = index === 0 ? p.color : p.color + "99"; 
+                        ctx.fillRect(segment.x * 20 + 1, segment.y * 20 + 1, 18, 18);
+                    });
+                }
             });
         }
     </script>
