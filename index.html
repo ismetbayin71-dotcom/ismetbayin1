@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Victory Edition</title>
+    <title>Snake Royale - Victory & Fireworks Edition</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         
@@ -23,7 +23,7 @@
         /* GERİ SAYIM METNİ */
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; text-shadow: 0 0 30px rgba(0,0,0,1); }
         
-        /* YENİ: KAZANAN EKRANI STİLİ */
+        /* KAZANAN EKRANI STİLİ */
         #victory-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); /* Yarı saydam siyah arka plan */
@@ -33,9 +33,44 @@
         }
         @keyframes fadeInVictory { from { opacity: 0; } to { opacity: 1; } }
         
-        #victory-image { width: 300px; height: auto; margin-bottom: 20px; border-radius: 15px; box-shadow: 0 0 30px rgba(241, 196, 15, 0.5); }
-        #victory-text { font-size: 48px; font-weight: bold; color: #f1c40f; text-shadow: 0 0 20px rgba(0,0,0,1); }
-        #winner-name { color: #2ecc71; font-size: 60px; }
+        #victory-image { width: 300px; height: auto; margin-bottom: 20px; border-radius: 15px; box-shadow: 0 0 30px rgba(241, 196, 15, 0.5); z-index: 210; }
+        #victory-text { font-size: 48px; font-weight: bold; color: #f1c40f; text-shadow: 0 0 20px rgba(0,0,0,1); z-index: 210; }
+        #winner-name { color: #2ecc71; font-size: 60px; z-index: 210; }
+        
+        /* "e çok iyi" YAZISI STİLİ VE ANİMASYONU */
+        #praise-text {
+            font-size: 80px; font-weight: bold; color: #e74c3c;
+            position: absolute; top: 20%;
+            text-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+            opacity: 0;
+            z-index: 220;
+            animation: praisePop 1s ease-out forwards 1.5s; /* 1.5 saniye gecikmeyle belirir */
+        }
+        @keyframes praisePop {
+            0% { opacity: 0; transform: scale(0.5) translateY(50px); }
+            70% { opacity: 1; transform: scale(1.1) translateY(0); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* HAVAİ FİŞEK PARTİKÜL STİLİ VE ANİMASYONU */
+        .firework-particle {
+            position: absolute;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            pointer-events: none; /* Tıklamayı engelle */
+            z-index: 205; /* Resmin arkasında, ekranın üzerinde */
+            animation: fireworkSparkle 1.5s ease-out forwards;
+        }
+        @keyframes fireworkSparkle {
+            0% {
+                transform: translate(0, 0) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(var(--dx), var(--dy)) scale(0);
+                opacity: 0;
+            }
+        }
         
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button#readyBtn.ready-on { background: #2ecc71; } /* Hazır olunca yeşil buton */
@@ -68,7 +103,7 @@
     </div>
 
     <div id="victory-screen">
-        <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s" alt="Kupa">
+        <div id="praise-text">e çok iyi</div> <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s" alt="Kupa">
         <div id="victory-text">KAZANAN</div>
         <div id="winner-name">...</div>
         <p style="color:#aaa; margin-top:20px;">Lobiye dönülüyor...</p>
@@ -183,7 +218,7 @@
                 startCountdown();
             }
             if(state.status === "finished" && gameStatus !== "finished") {
-                showWinnerUI(state.winner); // YENİ: Kazanan ekranını açan fonksiyon
+                showWinnerUI(state.winner); // Kazanan ekranını aç
             }
             if(state.status === "waiting") {
                 gameStatus = "waiting";
@@ -206,7 +241,43 @@
             }, 1000);
         }
 
-        // YENİ: KAZANAN EKRANINI GÖSTEREN FONKSİYON
+        // HAVAİ FİŞEK OLUŞTURAN FONKSİYON
+        function createFirework() {
+            const victoryScreen = document.getElementById("victory-screen");
+            
+            // Patlama merkezini rastgele belirle (ekranın üst yarısında)
+            const centerX = Math.random() * victoryScreen.offsetWidth;
+            const centerY = Math.random() * victoryScreen.offsetHeight * 0.5;
+            
+            // Rastgele renk seç (neon renkler)
+            const colors = ["#ff00ff", "#00ffff", "#ffff00", "#ff0000", "#00ff00"];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            // 30 partikül oluştur
+            for (let i = 0; i < 30; i++) {
+                const particle = document.createElement("div");
+                particle.classList.add("firework-particle");
+                
+                // Konumu ve rengi ata
+                particle.style.left = centerX + "px";
+                particle.style.top = centerY + "px";
+                particle.style.backgroundColor = color;
+                
+                // Dağılma yönünü ve mesafesini rastgele belirle (CSS değişkeni olarak)
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 200 + 50; // 50 ile 250px arası
+                particle.style.setProperty("--dx", Math.cos(angle) * distance + "px");
+                particle.style.setProperty("--dy", Math.sin(angle) * distance + "px");
+                
+                // Partikülü ekrana ekle
+                victoryScreen.appendChild(particle);
+                
+                // Animasyon bitince partikülü sil (hafıza temizliği)
+                setTimeout(() => { particle.remove(); }, 1500);
+            }
+        }
+
+        // KAZANAN EKRANINI GÖSTEREN FONKSİYON (GÜNCELLENDİ)
         function showWinnerUI(name) {
             gameStatus = "finished";
             const victoryScreen = document.getElementById("victory-screen");
@@ -215,7 +286,11 @@
             winnerNameDiv.innerText = name; // Kazananın ismini yaz
             victoryScreen.style.display = "flex"; // Ekranı aç
             
-            // 5 Saniye sonra lobiye dön
+            // Havai fişekleri patlat (3 saniye boyunca her 200ms'de bir patlama)
+            const fireworkInterval = setInterval(createFirework, 200);
+            setTimeout(() => { clearInterval(fireworkInterval); }, 3000);
+            
+            // 6 Saniye sonra lobiye dön (Animasyonlar ve şölen için süreyi uzattık)
             setTimeout(() => {
                 victoryScreen.style.display = "none"; // Ekranı kapat
                 document.getElementById("game-screen").style.display = "none";
@@ -237,7 +312,7 @@
                 if(myId === leader) {
                     db.ref('game/state').set({ status: "waiting", winner: "" });
                 }
-            }, 5000);
+            }, 6000); // 5 saniye -> 6 saniye
         }
 
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
@@ -263,8 +338,9 @@
         function calculateSpawnPosition() {
             const playersArr = Object.keys(allPlayers).sort();
             const myIndex = playersArr.indexOf(myId);
-            myData.x = Math.floor(15 + Math.cos((myIndex/playersArr.length)*Math.PI*2) * 8);
-            myData.y = Math.floor(15 + Math.sin((myIndex/playersArr.length)*Math.PI*2) * 8);
+            const angle = (myIndex / (playersArr.length || 1)) * Math.PI * 2;
+            myData.x = Math.floor(15 + Math.cos(angle) * 8);
+            myData.y = Math.floor(15 + Math.sin(angle) * 8);
             myData.dx = (myData.x < 15) ? 1 : -1; myData.dy = 0;
             myData.isDead = false; myData.maxLength = 3; myData.tail = [{x:myData.x, y:myData.y}];
             inputQueue = [];
