@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Ultimate Lobby Fix</title>
+    <title>Snake Royale - Auto Cycle Edition</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -15,9 +15,12 @@
         .player-item { padding: 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
         .is-ready { color: #2ecc71; font-weight: bold; }
         .not-ready { color: #555; }
-        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; color: #f1c40f; display: none; z-index: 100; text-shadow: 0 0 30px black; pointer-events: none; }
+        
+        #overlay-text { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 60px; font-weight: bold; color: #f1c40f; text-shadow: 0 0 30px black; z-index: 100; text-align: center; display: none; pointer-events: none; width: 500px;}
+        
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
         button#readyBtn.ready-on { background: #2ecc71; }
+        .spectating-msg { color: #e74c3c; font-size: 14px; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -37,12 +40,13 @@
     </div>
 
     <div id="game-screen">
-        <div id="countdown">3</div>
+        <div id="overlay-text">3</div>
         <canvas id="gameCanvas" width="600" height="600"></canvas>
         <div id="sidebar">
-            <h4 style="border-bottom:1px solid #444; padding-bottom:10px;">Skorlar</h4>
+            <h4 style="border-bottom:1px solid #444; padding-bottom:10px;">Durum</h4>
             <div id="status-list"></div>
-            <button onclick="leaveGame()" style="background:#444; margin-top:30px;">Oyundan Çık</button>
+            <div id="my-status" class="spectating-msg" style="display:none;">İZLEYİCİ MODU</div>
+            <button onclick="leaveGame()" style="background:#444; margin-top:30px;">Odadan Çık</button>
         </div>
     </div>
 
@@ -65,8 +69,8 @@
         let myId = Math.random().toString(36).substring(7);
         let myData = { id: myId, name: "", color: "", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
         let allPlayers = {};
-        let gameStatus = "waiting";
-        let localInLobby = false; // ASIL KİLİT BU
+        let gameStatus = "waiting"; 
+        let localInLobby = false;
         let inputQueue = [];
         let foods = [];
 
@@ -78,21 +82,16 @@
         function joinLobby() {
             const nameInput = document.getElementById("usernameInput");
             if(!nameInput.value.trim()) return alert("İsim gir!");
-            
             myData.name = nameInput.value;
             myData.color = document.getElementById("colorInput").value;
 
-            // Giriş yapmadan önce lobi durumunu kontrol et
             db.ref('players').once('value', snap => {
                 if (!snap.exists()) {
-                    // Kimse yoksa oyun durumunu zorla sıfırla
-                    db.ref('game/state').set({ status: "waiting" });
+                    db.ref('game/state').set({ status: "waiting", winner: "" });
                 }
-                
-                localInLobby = true; // Sadece butona basınca lobiye girişi onayla
+                localInLobby = true;
                 document.getElementById("login-view").style.display = "none";
                 document.getElementById("lobby-view").style.display = "block";
-                
                 db.ref('players/' + myId).set(myData);
                 db.ref('players/' + myId).onDisconnect().remove();
             });
@@ -106,65 +105,114 @@
         }
 
         function leaveGame() {
-            localInLobby = false;
-            db.ref('players/' + myId).remove().then(() => {
-                window.location.reload();
-            });
+            db.ref('players/' + myId).remove().then(() => { window.location.reload(); });
         }
 
-        // VERİ TAKİBİ
+        // VERİ DİNLEME VE KAZANAN KONTROLÜ
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
             allPlayers = data;
             
-            let total = 0, ready = 0;
+            let total = 0, ready = 0, aliveCount = 0, lastAlive = null;
             Object.values(data).forEach(p => {
-                if(p.name) { total++; if(p.isReady) ready++; }
+                if(p.name) { 
+                    total++; 
+                    if(p.isReady) ready++; 
+                    if(!p.isDead) { aliveCount++; lastAlive = p; }
+                }
             });
 
             updateLobbyUI();
             updateSidebarUI();
 
-            // Sadece lobi içindeyken ve herkes hazırsa başlat
-            if(localInLobby && total > 0 && ready === total && gameStatus === "waiting") {
+            // OYUN BAŞLATMA
+            if(localInLobby && total >= 1 && ready === total && gameStatus === "waiting") {
                 const leader = Object.keys(data).sort()[0];
                 if(myId === leader) {
-                    db.ref('game/state').set({ status: "counting" });
+                    db.ref('game/state').set({ status: "counting", winner: "" });
                     resetFoods();
                 }
             }
-        });
 
-        // OYUN DURUMU DİNLEYİCİSİ
-        db.ref('game/state').on('value', snap => {
-            const state = snap.val();
-            // EĞER localInLobby FALSE İSE GELEN SİNYALİ GÖRMEZDEN GEL
-            if(!state || !localInLobby) return;
-
-            if(state.status === "counting" && gameStatus === "waiting") {
-                gameStatus = "counting";
-                document.getElementById("lobby-view").style.display = "none";
-                document.getElementById("game-screen").style.display = "flex";
-                calculateSpawnPosition();
-                
-                let c = 3;
-                const cd = document.getElementById("countdown");
-                cd.style.display = "block";
-                const timer = setInterval(() => {
-                    cd.innerText = c;
-                    if(c === 0) { 
-                        clearInterval(timer); 
-                        cd.style.display = "none"; 
-                        gameStatus = "playing"; 
-                    }
-                    c--;
-                }, 1000);
+            // KAZANAN KONTROLÜ (Sadece oyun oynanırken)
+            if(gameStatus === "playing" && total > 1 && aliveCount === 1) {
+                const leader = Object.keys(data).sort()[0];
+                if(myId === leader) {
+                    db.ref('game/state').update({ status: "finished", winner: lastAlive.name });
+                }
+            } else if(gameStatus === "playing" && total >= 1 && aliveCount === 0) {
+                 const leader = Object.keys(data).sort()[0];
+                 if(myId === leader) db.ref('game/state').update({ status: "finished", winner: "BERABERE" });
             }
         });
 
-        // --- DİĞER FONKSİYONLAR ---
+        db.ref('game/state').on('value', snap => {
+            const state = snap.val();
+            if(!state || !localInLobby) return;
+
+            if(state.status === "counting" && gameStatus === "waiting") {
+                startCountdown();
+            }
+            if(state.status === "finished" && gameStatus !== "finished") {
+                showWinner(state.winner);
+            }
+            if(state.status === "waiting") {
+                gameStatus = "waiting";
+            }
+        });
+
+        function startCountdown() {
+            gameStatus = "counting";
+            document.getElementById("lobby-view").style.display = "none";
+            document.getElementById("game-screen").style.display = "flex";
+            document.getElementById("my-status").style.display = "none";
+            calculateSpawnPosition();
+            
+            let c = 3;
+            const overlay = document.getElementById("overlay-text");
+            overlay.style.display = "block";
+            overlay.style.fontSize = "150px";
+            const timer = setInterval(() => {
+                overlay.innerText = c;
+                if(c === 0) { clearInterval(timer); overlay.style.display = "none"; gameStatus = "playing"; }
+                c--;
+            }, 1000);
+        }
+
+        function showWinner(name) {
+            gameStatus = "finished";
+            const overlay = document.getElementById("overlay-text");
+            overlay.style.display = "block";
+            overlay.style.fontSize = "60px";
+            overlay.innerHTML = `KAZANAN<br><span style="color:#2ecc71">${name}</span>`;
+            
+            // 5 Saniye sonra lobiye dön
+            setTimeout(() => {
+                overlay.style.display = "none";
+                document.getElementById("game-screen").style.display = "none";
+                document.getElementById("lobby-view").style.display = "block";
+                
+                // Kendi durumunu sıfırla
+                myData.isReady = false;
+                myData.isDead = false;
+                myData.tail = [];
+                myData.maxLength = 3;
+                document.getElementById("readyBtn").innerText = "HAZIR DEĞİL";
+                document.getElementById("readyBtn").classList.remove("ready-on");
+                
+                db.ref('players/' + myId).set(myData);
+                gameStatus = "waiting";
+
+                // Eğer liderse oyun durumunu da bekleme moduna al
+                const leader = Object.keys(allPlayers).sort()[0];
+                if(myId === leader) {
+                    db.ref('game/state').set({ status: "waiting", winner: "" });
+                }
+            }, 5000);
+        }
+
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
-        
+
         function updateLobbyUI() {
             const list = document.getElementById("player-list");
             list.innerHTML = "";
@@ -179,15 +227,18 @@
             list.innerHTML = "";
             Object.values(allPlayers).sort((a,b)=>b.maxLength-a.maxLength).forEach(p=>{
                 if(!p.name) return;
-                list.innerHTML += `<div style="color:${p.color}; font-weight:bold; ${p.isDead?'text-decoration:line-through;opacity:0.5':''}">${p.name}: ${p.maxLength}</div>`;
+                const statusTxt = p.isDead ? "ÖLDÜ" : "HAYATTA";
+                list.innerHTML += `<div style="color:${p.color}; font-weight:bold; ${p.isDead?'opacity:0.4; text-decoration:line-through':''}">${p.name}: ${p.maxLength} (${statusTxt})</div>`;
             });
+            if(myData.isDead) document.getElementById("my-status").style.display = "block";
         }
 
         function calculateSpawnPosition() {
             const playersArr = Object.keys(allPlayers).sort();
             const myIndex = playersArr.indexOf(myId);
-            myData.x = Math.floor(15 + Math.cos((myIndex/playersArr.length)*Math.PI*2) * 8);
-            myData.y = Math.floor(15 + Math.sin((myIndex/playersArr.length)*Math.PI*2) * 8);
+            const total = playersArr.length || 1;
+            myData.x = Math.floor(15 + Math.cos((myIndex/total)*Math.PI*2) * 8);
+            myData.y = Math.floor(15 + Math.sin((myIndex/total)*Math.PI*2) * 8);
             myData.dx = (myData.x < 15) ? 1 : -1; myData.dy = 0;
             myData.isDead = false; myData.maxLength = 3; myData.tail = [{x:myData.x, y:myData.y}];
             inputQueue = [];
@@ -195,7 +246,7 @@
         }
 
         function resetFoods() {
-            let f = []; for(let i=0;i<5;i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
+            let f = []; for(let i=0;i<8;i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
             db.ref('game/foods').set(f);
         }
 
@@ -248,13 +299,18 @@
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.strokeStyle = "#111";
             for(let i=0;i<canvas.width;i+=grid){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,600);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(600,i);ctx.stroke();}
-            ctx.fillStyle = "#ff4757"; foods.forEach(f=>ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
+            
+            ctx.fillStyle = "#ff4757"; 
+            foods.forEach(f=> {
+                ctx.beginPath(); ctx.arc(f.x*grid+10, f.y*grid+10, 7, 0, Math.PI*2); ctx.fill();
+            });
+
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead || !p.name) return;
                 p.tail.forEach((seg, i) => {
                     ctx.fillStyle = i === 0 ? p.color : p.color + "99";
                     ctx.fillRect(seg.x*grid+1, seg.y*grid+1, grid-2, grid-2);
-                    if(i === 0) { ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.fillText(p.name, seg.x*grid, seg.y*grid-5); }
+                    if(i === 0) { ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.fillText(p.name, seg.x*grid+10, seg.y*grid-5); }
                 });
             });
         }
