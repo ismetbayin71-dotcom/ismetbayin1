@@ -2,22 +2,26 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Online Yılan Savaşı - Uzayan Kuyruk</title>
+    <title>Online Yılan Savaşı: Hardcore Mod</title>
     <style>
-        body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; margin: 0; }
-        canvas { border: 5px solid #333; background: #000; margin-top: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        #ui { display: flex; justify-content: center; gap: 20px; font-size: 20px; margin: 10px; }
-        .score-box { padding: 5px 15px; border-radius: 5px; background: #333; border-left: 5px solid #2ecc71; }
+        body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        canvas { border: 8px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        #ui { display: flex; gap: 30px; font-size: 24px; margin-bottom: 15px; font-weight: bold; }
+        .stat { padding: 10px 20px; border-radius: 10px; background: #1e1e1e; border-bottom: 4px solid #444; }
+        .dead-msg { color: #ff4757; font-size: 40px; position: absolute; display: none; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 15px; border: 2px solid #ff4757; }
     </style>
 </head>
 <body>
+
     <h1>Online Yılan Savaşı</h1>
     <div id="ui">
-        <div id="status" class="score-box">Bağlanılıyor...</div>
-        <div class="score-box">Boyun: <span id="myScore">1</span></div>
+        <div class="stat" id="status">Bağlanılıyor...</div>
+        <div class="stat" style="border-color: #2ecc71;">Boyun: <span id="myScore">3</span></div>
     </div>
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
-    <p>Elmaları topla, kuyruğunu uzat ve arkadaşınla yarış!</p>
+
+    <div id="deadMsg" class="dead-msg">ÖLDÜN! <br> <span style="font-size: 20px;">Yenilenmek için sayfayı yenile (F5)</span></div>
+    
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
@@ -42,77 +46,113 @@
         const ctx = canvas.getContext("2d");
         const status = document.getElementById("status");
         const scoreDisplay = document.getElementById("myScore");
+        const deadMsg = document.getElementById("deadMsg");
 
-        // Yılan verisi: tail dizisi artık tüm vücut koordinatlarını tutuyor
+        const grid = 20;
+        const tileCount = canvas.width / grid; // 30x30'luk büyük alan
+
         let myData = {
             id: myId,
-            x: 10, y: 10,
+            x: Math.floor(Math.random() * 25),
+            y: Math.floor(Math.random() * 25),
             dx: 1, dy: 0,
             color: myColor,
-            tail: [{x: 10, y: 10}],
-            maxLength: 3 // Başlangıç uzunluğu
+            tail: [],
+            maxLength: 3,
+            isDead: false
         };
 
-        let food = { x: 5, y: 5 };
+        let foods = [];
         let allPlayers = {};
 
         const playerRef = db.ref('players/' + myId);
-        const foodRef = db.ref('game/food');
+        const foodsRef = db.ref('game/foods');
 
         playerRef.onDisconnect().remove();
 
+        // Diğer oyuncuları izle
         db.ref('players').on('value', (snapshot) => {
             allPlayers = snapshot.val() || {};
-            status.innerText = "Online: " + Object.keys(allPlayers).length;
+            status.innerText = "Oyuncu: " + Object.keys(allPlayers).length;
         });
 
-        foodRef.on('value', (snapshot) => {
-            const newFood = snapshot.val();
-            if (newFood) food = newFood;
+        // Elmaları izle
+        foodsRef.on('value', (snapshot) => {
+            foods = snapshot.val() || [];
         });
+
+        // İlk girişte elma yoksa 5 tane oluştur (Sadece bir oyuncunun yapması yeterli)
+        foodsRef.get().then((snapshot) => {
+            if (!snapshot.exists() || snapshot.val().length < 5) {
+                resetFoods();
+            }
+        });
+
+        function resetFoods() {
+            let newFoods = [];
+            for(let i=0; i<5; i++) {
+                newFoods.push({x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount)});
+            }
+            foodsRef.set(newFoods);
+        }
 
         document.addEventListener("keydown", e => {
+            if(myData.isDead) return;
             if(e.key === "ArrowUp" && myData.dy === 0) { myData.dx = 0; myData.dy = -1; }
             if(e.key === "ArrowDown" && myData.dy === 0) { myData.dx = 0; myData.dy = 1; }
             if(e.key === "ArrowLeft" && myData.dx === 0) { myData.dx = -1; myData.dy = 0; }
             if(e.key === "ArrowRight" && myData.dx === 0) { myData.dx = 1; myData.dy = 0; }
         });
 
-        function spawnFood() {
-            foodRef.set({
-                x: Math.floor(Math.random() * 20),
-                y: Math.floor(Math.random() * 20)
-            });
-        }
-
-        // Oyun Döngüsü
         setInterval(() => {
-            // Yeni kafa pozisyonu
+            if(myData.isDead) return;
+
             myData.x += myData.dx;
             myData.y += myData.dy;
 
-            // Ekran sınırları
-            if(myData.x < 0) myData.x = 19; if(myData.x > 19) myData.x = 0;
-            if(myData.y < 0) myData.y = 19; if(myData.y > 19) myData.y = 0;
+            // Duvarlara çarpma
+            if(myData.x < 0 || myData.x >= tileCount || myData.y < 0 || myData.y >= tileCount) {
+                gameOver();
+            }
 
-            // Yeni kafayı kuyruğun başına ekle
+            // Kendi kuyruğuna veya başkasına çarpma kontrolü
+            Object.values(allPlayers).forEach(p => {
+                if(!p.tail) return;
+                p.tail.forEach(seg => {
+                    // Eğer kafa, herhangi bir kuyruk parçasıyla çakışırsa (kendisi hariç başlangıçta)
+                    if(myData.x === seg.x && myData.y === seg.y) {
+                        // Kendi kafasına çarpmasın diye küçük bir kontrol
+                        if(p.id !== myId || myData.tail.length > 2) {
+                            gameOver();
+                        }
+                    }
+                });
+            });
+
+            // Elma yeme kontrolü
+            foods.forEach((f, index) => {
+                if(myData.x === f.x && myData.y === f.y) {
+                    myData.maxLength++;
+                    scoreDisplay.innerText = myData.maxLength;
+                    // O elmayı güncelle
+                    let updatedFoods = [...foods];
+                    updatedFoods[index] = {x: Math.floor(Math.random() * tileCount), y: Math.floor(Math.random() * tileCount)};
+                    foodsRef.set(updatedFoods);
+                }
+            });
+
             myData.tail.unshift({x: myData.x, y: myData.y});
-
-            // Yiyecek kontrolü
-            if(myData.x === food.x && myData.y === food.y) {
-                myData.maxLength++;
-                scoreDisplay.innerText = myData.maxLength;
-                spawnFood();
-            }
-
-            // Kuyruğu sınırla (uzunluk kontrolü)
-            while(myData.tail.length > myData.maxLength) {
-                myData.tail.pop();
-            }
+            while(myData.tail.length > myData.maxLength) myData.tail.pop();
 
             playerRef.set(myData);
             draw();
-        }, 150);
+        }, 120);
+
+        function gameOver() {
+            myData.isDead = true;
+            deadMsg.style.display = "block";
+            playerRef.remove();
+        }
 
         function draw() {
             ctx.fillStyle = "black";
@@ -120,24 +160,25 @@
             
             // Izgara
             ctx.strokeStyle = "#111";
-            for(let i=0; i<400; i+=20) {
-                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
+            for(let i=0; i<canvas.width; i+=grid) {
+                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke();
             }
 
-            // Elma çizimi
+            // 5 Elma
             ctx.fillStyle = "#ff4757";
-            ctx.beginPath();
-            ctx.arc(food.x * 20 + 10, food.y * 20 + 10, 8, 0, Math.PI * 2);
-            ctx.fill();
+            foods.forEach(f => {
+                ctx.beginPath();
+                ctx.arc(f.x * grid + 10, f.y * grid + 10, 8, 0, Math.PI * 2);
+                ctx.fill();
+            });
 
-            // Tüm oyuncuların tüm kuyruklarını çiz
+            // Oyuncular
             Object.values(allPlayers).forEach(p => {
                 if(p.tail) {
-                    p.tail.forEach((segment, index) => {
-                        // Kafa kısmı biraz daha parlak olsun
-                        ctx.fillStyle = index === 0 ? p.color : p.color + "99"; 
-                        ctx.fillRect(segment.x * 20 + 1, segment.y * 20 + 1, 18, 18);
+                    p.tail.forEach((seg, i) => {
+                        ctx.fillStyle = i === 0 ? p.color : p.color + "AA";
+                        ctx.fillRect(seg.x * grid + 1, seg.y * grid + 1, grid - 2, grid - 2);
                     });
                 }
             });
