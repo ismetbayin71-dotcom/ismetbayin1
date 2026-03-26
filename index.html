@@ -2,28 +2,20 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Fixed Lobby</title>
+    <title>Snake Royale - Clean Start</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        
-        /* GİRİŞ EKRANI - HER ZAMAN İLK BU GÖRÜNECEK */
         #login-view { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: block; }
-        
-        /* LOBİ EKRANI */
         #lobby-view { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; display: none; }
-        
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
         #player-list { text-align: left; background: #151515; padding: 15px; border-radius: 10px; margin: 20px 0; max-height: 200px; overflow-y: auto; }
         .player-item { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-
-        /* OYUN EKRANI */
         #game-screen { display: none; position: relative; flex-direction: row; gap: 20px; }
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
         .alive { color: #2ecc71; font-weight: bold; margin-bottom: 5px; }
         .dead { color: #ff4757; text-decoration: line-through; opacity: 0.6; margin-bottom: 5px; }
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; text-shadow: 0 0 30px rgba(0,0,0,1); z-index: 100; pointer-events: none; }
-        
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button:hover { background: #2980b9; }
         button.start-btn { background: #2ecc71; display: none; }
@@ -42,7 +34,7 @@
         <h3>Oda Lobisi</h3>
         <div id="player-list"></div>
         <button id="hostStartBtn" class="start-btn" onclick="requestStart()">OYUNU BAŞLAT</button>
-        <p id="waitMsg" style="color:#888; font-size:12px;">Hostun oyunu başlatması bekleniyor...</p>
+        <p id="waitMsg" style="color:#888; font-size:12px;">Host bekleniyor...</p>
     </div>
 
     <div id="game-screen">
@@ -51,7 +43,7 @@
         <div id="sidebar">
             <h4 style="margin:0; border-bottom:1px solid #444; padding-bottom:10px;">Sıralama</h4>
             <div id="status-list"></div>
-            <button onclick="location.reload()" style="background:#444; margin-top:30px;">Ayrıl</button>
+            <button onclick="leaveGame()" style="background:#444; margin-top:30px;">Ayrıl</button>
         </div>
     </div>
 
@@ -83,33 +75,32 @@
         const grid = 20;
         const tileCount = 30;
 
-        // LOBİYE KATILMA FONKSİYONU
         function joinLobby() {
             const name = document.getElementById("usernameInput").value;
-            if(!name) return alert("Lütfen bir isim girin!");
+            if(!name) return alert("İsim gir!");
 
             myData.name = name;
             myData.color = document.getElementById("colorInput").value;
 
-            // Görünümü Değiştir
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
 
-            // Firebase Kayıt
-            const playerRef = db.ref('players/' + myId);
-            playerRef.set(myData);
-            playerRef.onDisconnect().remove();
-
-            // Host Kontrolü ve State Sıfırlama
+            // ÖNCE EKSİ VERİLERİ TEMİZLE (Eğer oda boşsa)
             db.ref('players').once('value', snap => {
-                const players = snap.val() || {};
-                if(Object.keys(players).length === 1) {
+                const currentPlayers = snap.val() || {};
+                const count = Object.keys(currentPlayers).length;
+
+                if(count === 0) {
+                    // Oda boşsa her şeyi sıfırla
+                    db.ref('/').update({ 'game/state': { status: "waiting" }, 'game/foods': null });
                     myData.isHost = true;
-                    playerRef.update({ isHost: true });
-                    db.ref('game/state').set({ status: "waiting" }); // Oda boşsa durumu sıfırla
                     document.getElementById("hostStartBtn").style.display = "block";
                     document.getElementById("waitMsg").style.display = "none";
                 }
+
+                const playerRef = db.ref('players/' + myId);
+                playerRef.set(myData);
+                playerRef.onDisconnect().remove();
             });
         }
 
@@ -118,7 +109,12 @@
             resetFoods();
         }
 
-        // VERİ DİNLEYİCİLER
+        function leaveGame() {
+            db.ref('players/' + myId).remove().then(() => {
+                location.reload();
+            });
+        }
+
         db.ref('players').on('value', snap => {
             allPlayers = snap.val() || {};
             updateLobbyList();
@@ -128,12 +124,14 @@
         db.ref('game/state').on('value', snap => {
             const state = snap.val();
             if(!state) return;
-            
-            // Eğer oyun başladıysa ve ben daha lobiye bile girmediysem (Login ekranındaysam) hiçbir şey yapma
             if(document.getElementById("login-view").style.display === "block") return;
 
             if(state.status === "counting" && gameStatus === "waiting") startCountdown();
-            if(state.status === "waiting") gameStatus = "waiting";
+            if(state.status === "waiting") {
+                gameStatus = "waiting";
+                document.getElementById("game-screen").style.display = "none";
+                document.getElementById("lobby-view").style.display = "block";
+            }
         });
 
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
@@ -158,7 +156,6 @@
             gameStatus = "counting";
             document.getElementById("lobby-view").style.display = "none";
             document.getElementById("game-screen").style.display = "flex";
-            
             calculateSpawnPosition();
             db.ref('players/' + myId).set(myData);
 
