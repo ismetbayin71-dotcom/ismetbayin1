@@ -2,33 +2,22 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Kesin Lobi Çözümü</title>
+    <title>Snake Royale - Reset Edition</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        
-        /* EKRANLAR */
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
         #login-view { display: block; }
-        
-        #game-screen { background: transparent; border: none; width: auto; box-shadow: none; display: none; flex-direction: row; gap: 20px; position: relative; }
-        
+        #game-screen { background: transparent; border: none; width: auto; display: none; flex-direction: row; gap: 20px; position: relative; }
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
-        
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
-        
-        /* LOBİ LİSTESİ */
-        #player-list { margin: 20px 0; max-height: 250px; overflow-y: auto; background: #151515; border-radius: 10px; border: 1px solid #333; }
-        .player-item { padding: 12px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-        .ready-status { font-weight: bold; font-size: 12px; }
-        .is-ready { color: #2ecc71; text-shadow: 0 0 8px rgba(46, 204, 113, 0.4); }
+        #player-list { margin: 20px 0; min-height: 50px; background: #151515; border-radius: 10px; }
+        .player-item { padding: 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+        .is-ready { color: #2ecc71; font-weight: bold; }
         .not-ready { color: #555; }
-
-        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; text-shadow: 0 0 30px rgba(0,0,0,1); }
-        
-        button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
-        button#readyBtn.active { background: #2ecc71; box-shadow: 0 0 15px rgba(46, 204, 113, 0.4); }
-        button:hover { opacity: 0.9; transform: scale(1.02); }
+        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; color: #f1c40f; display: none; z-index: 100; text-shadow: 0 0 30px black; pointer-events: none; }
+        button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
+        button#readyBtn.ready-on { background: #2ecc71; }
     </style>
 </head>
 <body>
@@ -36,24 +25,24 @@
     <div id="login-view" class="screen">
         <h2>Snake Royale</h2>
         <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12">
-        <div>Yılan Rengi: <input type="color" id="colorInput" value="#2ecc71"></div>
-        <button onclick="joinLobby()">Lobiye Gir</button>
+        <div>Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
+        <button onclick="joinLobby()">Lobiye Katıl</button>
     </div>
 
     <div id="lobby-view" class="screen">
-        <h3>Lobi Bekleme Odası</h3>
+        <h3>Lobi</h3>
         <div id="player-list"></div>
         <button id="readyBtn" onclick="toggleReady()">HAZIR DEĞİL</button>
-        <p style="color:#666; font-size:11px; margin-top:15px;">Tüm oyuncular hazır olduğunda oyun otomatik başlar.</p>
+        <p style="color:#666; font-size:11px; margin-top:10px;">Herkes hazır olunca başlar.</p>
     </div>
 
     <div id="game-screen">
         <div id="countdown">3</div>
         <canvas id="gameCanvas" width="600" height="600"></canvas>
         <div id="sidebar">
-            <h4 style="margin:0; border-bottom:1px solid #444; padding-bottom:10px;">Sıralama</h4>
+            <h4 style="border-bottom:1px solid #444; padding-bottom:10px;">Skorlar</h4>
             <div id="status-list"></div>
-            <button onclick="location.reload()" style="background:#444; margin-top:30px;">Odadan Ayrıl</button>
+            <button onclick="location.reload()" style="background:#444; margin-top:30px;">Çıkış Yap</button>
         </div>
     </div>
 
@@ -77,8 +66,8 @@
 
         let myData = { id: myId, name: "", color: "", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
         let allPlayers = {};
-        let gameStatus = "waiting"; 
-        let foods = [];
+        let gameStatus = "waiting";
+        let localInLobby = false; // Tarayıcı kilidi
 
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -87,54 +76,61 @@
 
         function joinLobby() {
             const name = document.getElementById("usernameInput").value;
-            if(!name.trim()) return alert("Lütfen ismini yaz!");
+            if(!name.trim()) return alert("İsim gir!");
+            
             myData.name = name;
             myData.color = document.getElementById("colorInput").value;
 
+            // ÖNCE TEMİZLİK: Eğer kimse yoksa veritabanını komple sıfırla
+            db.ref('players').once('value', snap => {
+                const count = snap.numChildren();
+                if (count === 0) {
+                    db.ref('/').set({ 
+                        'game/state': { status: "waiting" },
+                        'game/foods': null,
+                        'players': null 
+                    }).then(registerAndEntry);
+                } else {
+                    registerAndEntry();
+                }
+            });
+        }
+
+        function registerAndEntry() {
+            localInLobby = true;
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
-
-            // Eğer veritabanı boşsa (null ise), önce lobi durumunu sıfırla
-            db.ref('players').once('value', snap => {
-                if(!snap.exists()) {
-                    db.ref('game/state').set({ status: "waiting" });
-                }
-                const playerRef = db.ref('players/' + myId);
-                playerRef.set(myData);
-                playerRef.onDisconnect().remove();
-            });
+            
+            db.ref('players/' + myId).set(myData);
+            db.ref('players/' + myId).onDisconnect().remove();
         }
 
         function toggleReady() {
             myData.isReady = !myData.isReady;
             const btn = document.getElementById("readyBtn");
-            btn.innerText = myData.isReady ? "HAZIRSIN!" : "HAZIR DEĞİL";
-            btn.classList.toggle("active", myData.isReady);
+            btn.innerText = myData.isReady ? "HAZIRSIN" : "HAZIR DEĞİL";
+            btn.classList.toggle("ready-on", myData.isReady);
             db.ref('players/' + myId).update({ isReady: myData.isReady });
         }
 
+        // VERİ DİNLEME
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
-            allPlayers = {};
-            let total = 0;
-            let ready = 0;
-
-            Object.keys(data).forEach(key => {
-                if(data[key].name) {
-                    allPlayers[key] = data[key];
-                    total++;
-                    if(data[key].isReady) ready++;
-                }
+            allPlayers = data;
+            
+            let total = 0, ready = 0;
+            Object.values(data).forEach(p => {
+                if(p.name) { total++; if(p.isReady) ready++; }
             });
 
             updateLobbyUI();
             updateSidebar();
 
-            // SADECE HERKES HAZIRSA BAŞLAT
-            if(total > 0 && ready === total && gameStatus === "waiting") {
-                // Sadece alfabetik olarak ilk oyuncu "başlat" komutunu göndersin (çakışma olmasın)
-                if(myId === Object.keys(allPlayers).sort()[0]) {
-                    db.ref('game/state').set({ status: "counting", time: Date.now() });
+            // SADECE HERKES HAZIRSA BAŞLAT (Lobi Kilidi Açık Olmalı)
+            if(localInLobby && total > 0 && ready === total && gameStatus === "waiting") {
+                const leader = Object.keys(data).sort()[0];
+                if(myId === leader) {
+                    db.ref('game/state').set({ status: "counting" });
                     resetFoods();
                 }
             }
@@ -142,107 +138,87 @@
 
         db.ref('game/state').on('value', snap => {
             const state = snap.val();
-            if(!state || document.getElementById("login-view").style.display === "block") return;
-            if(state.status === "counting" && gameStatus === "waiting") startCountdown();
-            if(state.status === "waiting") gameStatus = "waiting";
+            if(!state || !localInLobby) return; 
+
+            if(state.status === "counting" && gameStatus === "waiting") {
+                gameStatus = "counting";
+                document.getElementById("lobby-view").style.display = "none";
+                document.getElementById("game-screen").style.display = "flex";
+                calculateSpawnPosition();
+                
+                let c = 3;
+                const cd = document.getElementById("countdown");
+                cd.style.display = "block";
+                const timer = setInterval(() => {
+                    cd.innerText = c;
+                    if(c === 0) { clearInterval(timer); cd.style.display = "none"; gameStatus = "playing"; }
+                    c--;
+                }, 1000);
+            }
         });
 
+        // --- DİĞER FONKSİYONLAR ---
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
-
+        
         function updateLobbyUI() {
             const list = document.getElementById("player-list");
             list.innerHTML = "";
             Object.values(allPlayers).forEach(p => {
-                list.innerHTML += `
-                    <div class="player-item">
-                        <span style="color:${p.color}">${p.name}</span>
-                        <span class="ready-status ${p.isReady ? 'is-ready' : 'not-ready'}">
-                            ${p.isReady ? '✔ HAZIR' : 'BEKLİYOR...'}
-                        </span>
-                    </div>`;
+                if(!p.name) return;
+                list.innerHTML += `<div class="player-item"><span>${p.name}</span><span class="${p.isReady?'is-ready':'not-ready'}">${p.isReady?'HAZIR':'...'}</span></div>`;
             });
         }
 
         function updateSidebar() {
             const list = document.getElementById("status-list");
             list.innerHTML = "";
-            Object.values(allPlayers).sort((a,b) => b.maxLength - a.maxLength).forEach(p => {
-                list.innerHTML += `<div class="${p.isDead ? 'dead' : 'alive'}">${p.name}: ${p.maxLength}</div>`;
+            Object.values(allPlayers).sort((a,b)=>b.maxLength-a.maxLength).forEach(p=>{
+                if(!p.name) return;
+                list.innerHTML += `<div class="${p.isDead?'dead':'alive'}">${p.name}: ${p.maxLength}</div>`;
             });
-        }
-
-        function startCountdown() {
-            gameStatus = "counting";
-            document.getElementById("lobby-view").style.display = "none";
-            document.getElementById("game-screen").style.display = "flex";
-            calculateSpawnPosition();
-            db.ref('players/' + myId).set(myData);
-
-            const cdDiv = document.getElementById("countdown");
-            cdDiv.style.display = "block";
-            let count = 3;
-            const interval = setInterval(() => {
-                cdDiv.innerText = count;
-                if(count === 0) { 
-                    clearInterval(interval); 
-                    cdDiv.style.display = "none"; 
-                    gameStatus = "playing"; 
-                }
-                count--;
-            }, 1000);
         }
 
         function calculateSpawnPosition() {
             const playersArr = Object.keys(allPlayers).sort();
             const myIndex = playersArr.indexOf(myId);
-            const totalPlayers = playersArr.length;
-            const angle = (myIndex / (totalPlayers || 1)) * Math.PI * 2;
-            const centerX = tileCount / 2;
-            const centerY = tileCount / 2;
-            myData.x = Math.floor(centerX + Math.cos(angle) * 10);
-            myData.y = Math.floor(centerY + Math.sin(angle) * 10);
-            myData.dx = (myData.x < centerX) ? 1 : -1;
-            myData.dy = 0;
-            myData.isDead = false;
-            myData.maxLength = 3;
-            myData.tail = [{x: myData.x, y: myData.y}];
+            const angle = (myIndex / (playersArr.length || 1)) * Math.PI * 2;
+            myData.x = Math.floor(15 + Math.cos(angle) * 8);
+            myData.y = Math.floor(15 + Math.sin(angle) * 8);
+            myData.dx = (myData.x < 15) ? 1 : -1; myData.dy = 0;
+            myData.isDead = false; myData.maxLength = 3; myData.tail = [{x:myData.x, y:myData.y}];
+            db.ref('players/' + myId).set(myData);
+        }
+
+        function resetFoods() {
+            let f = []; for(let i=0;i<5;i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
+            db.ref('game/foods').set(f);
         }
 
         document.addEventListener("keydown", e => {
             if(gameStatus !== "playing" || myData.isDead) return;
-            if(e.key === "ArrowUp" && myData.dy === 0) { myData.dx = 0; myData.dy = -1; }
-            if(e.key === "ArrowDown" && myData.dy === 0) { myData.dx = 0; myData.dy = 1; }
-            if(e.key === "ArrowLeft" && myData.dx === 0) { myData.dx = -1; myData.dy = 0; }
-            if(e.key === "ArrowRight" && myData.dx === 0) { myData.dx = 1; myData.dy = 0; }
+            const keys = {"ArrowUp":[0,-1], "ArrowDown":[0,1], "ArrowLeft":[-1,0], "ArrowRight":[1,0]};
+            if(keys[e.key]) {
+                const [ndx, ndy] = keys[e.key];
+                if(ndx !== -myData.dx && ndy !== -myData.dy) { myData.dx = ndx; myData.dy = ndy; }
+            }
         });
 
         setInterval(() => {
             if(gameStatus === "playing" && !myData.isDead) {
-                myData.x += myData.dx; myData.y += myData.dy;
-                if(myData.x < 0) myData.x = tileCount - 1;
-                if(myData.x >= tileCount) myData.x = 0;
-                if(myData.y < 0) myData.y = tileCount - 1;
-                if(myData.y >= tileCount) myData.y = 0;
-                
+                myData.x = (myData.x + myData.dx + tileCount) % tileCount;
+                myData.y = (myData.y + myData.dy + tileCount) % tileCount;
                 Object.values(allPlayers).forEach(p => {
                     if(!p.tail || p.isDead) return;
-                    p.tail.forEach(seg => {
-                        if(myData.x === seg.x && myData.y === seg.y) {
-                            if(p.id !== myId || myData.tail.length > 2) die();
-                        }
-                    });
+                    p.tail.forEach(seg => { if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); });
                 });
-                
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
-                        let newFoods = [...foods];
-                        newFoods[i] = {x: Math.floor(Math.random()*tileCount), y: Math.floor(Math.random()*tileCount)};
-                        db.ref('game/foods').set(newFoods);
+                        let n = [...foods]; n[i] = {x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)};
+                        db.ref('game/foods').set(n);
                     }
                 });
-                
-                myData.tail.unshift({x: myData.x, y: myData.y});
+                myData.tail.unshift({x:myData.x, y:myData.y});
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
             }
@@ -250,31 +226,18 @@
         }, 130);
 
         function die() { myData.isDead = true; db.ref('players/' + myId).update({ isDead: true }); }
-        function resetFoods() {
-            let f = [];
-            for(let i=0; i<5; i++) f.push({x: Math.floor(Math.random()*tileCount), y: Math.floor(Math.random()*tileCount)});
-            db.ref('game/foods').set(f);
-        }
-
+        
         function draw() {
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.strokeStyle = "#111";
-            for(let i=0; i<canvas.width; i+=grid) {
-                ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,600); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(600,i); ctx.stroke();
-            }
-            ctx.fillStyle = "#ff4757";
-            foods.forEach(f => { ctx.beginPath(); ctx.arc(f.x*grid+10, f.y*grid+10, 8, 0, Math.PI*2); ctx.fill(); });
-            
+            for(let i=0;i<canvas.width;i+=grid){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,600);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(600,i);ctx.stroke();}
+            ctx.fillStyle = "#ff4757"; foods.forEach(f=>ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
             Object.values(allPlayers).forEach(p => {
-                if(!p.tail || p.isDead) return;
+                if(!p.tail || p.isDead || !p.name) return;
                 p.tail.forEach((seg, i) => {
                     ctx.fillStyle = i === 0 ? p.color : p.color + "99";
                     ctx.fillRect(seg.x*grid+1, seg.y*grid+1, grid-2, grid-2);
-                    if(i === 0) {
-                        ctx.fillStyle = "white"; ctx.font = "12px Arial"; ctx.textAlign = "center";
-                        ctx.fillText(p.name, seg.x*grid + 10, seg.y*grid - 8);
-                    }
+                    if(i === 0) { ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.fillText(p.name, seg.x*grid, seg.y*grid-5); }
                 });
             });
         }
