@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Final Fix</title>
+    <title>Snake Royale - No Self-Collision</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -17,7 +17,6 @@
         .not-ready { color: #555; }
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; color: #f1c40f; display: none; z-index: 100; text-shadow: 0 0 30px black; pointer-events: none; }
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
-        button:active { transform: scale(0.98); }
         button#readyBtn.ready-on { background: #2ecc71; }
     </style>
 </head>
@@ -63,13 +62,12 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        
-        // Her girişte taze bir ID alalım
         let myId = Math.random().toString(36).substring(7);
         let myData = { id: myId, name: "", color: "", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
         let allPlayers = {};
         let gameStatus = "waiting";
         let localInLobby = false;
+        let foods = [];
 
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -79,27 +77,14 @@
         function joinLobby() {
             const nameInput = document.getElementById("usernameInput");
             if(!nameInput.value.trim()) return alert("İsim gir!");
-            
-            // Butonu geçici olarak devre dışı bırak (çift tıklamayı önle)
             document.getElementById("mainJoinBtn").disabled = true;
-            document.getElementById("mainJoinBtn").innerText = "Bağlanıyor...";
-
             myData.name = nameInput.value;
             myData.color = document.getElementById("colorInput").value;
 
-            // Önce mevcut oyuncu var mı bak
             db.ref('players').once('value', snap => {
-                const count = snap.numChildren();
-                if (count === 0) {
-                    // Veritabanı boşsa her şeyi resetle
-                    db.ref('/').update({ 
-                        'game/state': { status: "waiting" },
-                        'game/foods': null,
-                        'players': null 
-                    }).then(completeJoin);
-                } else {
-                    completeJoin();
-                }
+                if (snap.numChildren() === 0) {
+                    db.ref('/').update({ 'game/state': { status: "waiting" }, 'game/foods': null, 'players': null }).then(completeJoin);
+                } else { completeJoin(); }
             });
         }
 
@@ -107,43 +92,30 @@
             localInLobby = true;
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
-            
-            const playerRef = db.ref('players/' + myId);
-            playerRef.set(myData);
-            playerRef.onDisconnect().remove();
+            db.ref('players/' + myId).set(myData);
+            db.ref('players/' + myId).onDisconnect().remove();
         }
 
         function toggleReady() {
             myData.isReady = !myData.isReady;
-            const btn = document.getElementById("readyBtn");
-            btn.innerText = myData.isReady ? "HAZIRSIN" : "HAZIR DEĞİL";
-            btn.classList.toggle("ready-on", myData.isReady);
+            document.getElementById("readyBtn").innerText = myData.isReady ? "HAZIRSIN" : "HAZIR DEĞİL";
+            document.getElementById("readyBtn").classList.toggle("ready-on", myData.isReady);
             db.ref('players/' + myId).update({ isReady: myData.isReady });
         }
 
         function leaveGame() {
-            // Veritabanından sil ve sayfayı tamamen yenile
-            db.ref('players/' + myId).remove().then(() => {
-                window.location.reload();
-            });
+            db.ref('players/' + myId).remove().then(() => { window.location.reload(); });
         }
 
-        // --- VERİ DİNLEME ---
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
             allPlayers = data;
-            
             let total = 0, ready = 0;
-            Object.values(data).forEach(p => {
-                if(p.name) { total++; if(p.isReady) ready++; }
-            });
-
+            Object.values(data).forEach(p => { if(p.name) { total++; if(p.isReady) ready++; } });
             updateLobbyUI();
             updateSidebarUI();
-
             if(localInLobby && total > 0 && ready === total && gameStatus === "waiting") {
-                const leader = Object.keys(data).sort()[0];
-                if(myId === leader) {
+                if(myId === Object.keys(data).sort()[0]) {
                     db.ref('game/state').set({ status: "counting" });
                     resetFoods();
                 }
@@ -153,13 +125,11 @@
         db.ref('game/state').on('value', snap => {
             const state = snap.val();
             if(!state || !localInLobby) return; 
-
             if(state.status === "counting" && gameStatus === "waiting") {
                 gameStatus = "counting";
                 document.getElementById("lobby-view").style.display = "none";
                 document.getElementById("game-screen").style.display = "flex";
                 calculateSpawnPosition();
-                
                 let c = 3;
                 const cd = document.getElementById("countdown");
                 cd.style.display = "block";
@@ -171,9 +141,8 @@
             }
         });
 
-        // --- OYUN MANTIĞI VE ÇİZİM ---
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
-        
+
         function updateLobbyUI() {
             const list = document.getElementById("player-list");
             list.innerHTML = "";
@@ -208,27 +177,24 @@
             db.ref('game/foods').set(f);
         }
 
+        // YÖN KONTROLÜ - 180 DERECE DÖNÜŞÜ ENGELLEYEN YER
         document.addEventListener("keydown", e => {
             if(gameStatus !== "playing" || myData.isDead) return;
-            const keys = {"ArrowUp":[0,-1], "ArrowDown":[0,1], "ArrowLeft":[-1,0], "ArrowRight":[1,0]};
-            if(keys[e.key]) {
-                const [ndx, ndy] = keys[e.key];
-                if(ndx !== -myData.dx && ndy !== -myData.dy) { myData.dx = ndx; myData.dy = ndy; }
-            }
+            // Yukarı giderken (dy = -1) aşağı (dy = 1) basamazsın ve tam tersi
+            if(e.key === "ArrowUp" && myData.dy !== 1)    { myData.dx = 0; myData.dy = -1; }
+            if(e.key === "ArrowDown" && myData.dy !== -1) { myData.dx = 0; myData.dy = 1; }
+            if(e.key === "ArrowLeft" && myData.dx !== 1)  { myData.dx = -1; myData.dy = 0; }
+            if(e.key === "ArrowRight" && myData.dx !== -1) { myData.dx = 1; myData.dy = 0; }
         });
 
         setInterval(() => {
             if(gameStatus === "playing" && !myData.isDead) {
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
-                
                 Object.values(allPlayers).forEach(p => {
                     if(!p.tail || p.isDead) return;
-                    p.tail.forEach(seg => { 
-                        if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); 
-                    });
+                    p.tail.forEach(seg => { if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); });
                 });
-
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
@@ -236,7 +202,6 @@
                         db.ref('game/foods').set(n);
                     }
                 });
-                
                 myData.tail.unshift({x:myData.x, y:myData.y});
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
