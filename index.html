@@ -2,29 +2,26 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Online Yılan Savaşı</title>
+    <title>Online Yılan Savaşı - Otomatik</title>
     <style>
-        body { background: #1a1a1a; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
-        canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 30px rgba(0,0,0,0.7); margin-top: 20px; }
-        #status { font-size: 22px; margin: 15px; color: #2ecc71; font-weight: bold; }
-        .info { color: #888; margin-top: 10px; }
+        body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; margin: 0; }
+        canvas { border: 5px solid #333; background: #000; margin-top: 20px; }
+        #status { font-size: 22px; margin: 15px; color: #2ecc71; }
     </style>
 </head>
 <body>
     <h1>Online Yılan Savaşı</h1>
     <div id="status">Bağlanılıyor...</div>
     <canvas id="gameCanvas" width="400" height="400"></canvas>
-    <div class="info">Ok tuşlarıyla hareket et. Arkadaşına linki gönder!</div>
+    <p>Ok tuşlarıyla yön ver. Yılan otomatik ilerler!</p>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
     <script>
-        // Senin Güncel Firebase Bilgilerin
         const firebaseConfig = {
             apiKey: "AIzaSyBktCn2NgiO0zWrZCSHLsjTXvhkNRDNSi4",
             authDomain: "snake-e0eac.firebaseapp.com",
-            // Belçika sunucusu için tam adres:
             databaseURL: "https://snake-e0eac-default-rtdb.europe-west1.firebasedatabase.app",
             projectId: "snake-e0eac",
             storageBucket: "snake-e0eac.firebasestorage.app",
@@ -32,11 +29,8 @@
             appId: "1:788073914029:web:dd7fcb83d11483ef31f024"
         };
 
-        // Firebase Başlatma
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        
-        // Benzersiz oyuncu ID'si ve rastgele renk
         const myId = Math.random().toString(36).substring(7);
         const myColor = '#' + Math.floor(Math.random()*16777215).toString(16);
         
@@ -44,48 +38,58 @@
         const ctx = canvas.getContext("2d");
         const status = document.getElementById("status");
 
+        // Yılanın durumu
         let myData = {
             id: myId,
-            x: Math.floor(Math.random() * 18) + 1,
-            y: Math.floor(Math.random() * 18) + 1,
+            x: 10, y: 10,
+            dx: 1, dy: 0, // Hareket yönü (başlangıçta sağa)
             color: myColor
         };
 
-        // Oyuncu referansı ve bağlantı koptuğunda silme
         const playerRef = db.ref('players/' + myId);
-        playerRef.set(myData);
         playerRef.onDisconnect().remove();
 
-        // Diğer oyuncuları anlık dinle
+        let allPlayers = {};
+
+        // Veritabanını dinle
         db.ref('players').on('value', (snapshot) => {
-            const players = snapshot.val() || {};
-            const count = Object.keys(players).length;
-            
-            if(count > 0) {
-                status.innerText = "Online Oyuncu: " + count + (count > 1 ? " (Arkadaşınla Kapış!)" : " (Bekleniyor...)");
-            }
-            draw(players);
+            allPlayers = snapshot.val() || {};
+            const count = Object.keys(allPlayers).length;
+            status.innerText = "Online Oyuncu: " + count;
         });
 
-        // Hareket Kontrolü
+        // Klavye ile sadece YÖN değiştir
         document.addEventListener("keydown", e => {
-            let moved = false;
-            if(e.key === "ArrowUp" && myData.y > 0) { myData.y--; moved = true; }
-            if(e.key === "ArrowDown" && myData.y < 19) { myData.y++; moved = true; }
-            if(e.key === "ArrowLeft" && myData.x > 0) { myData.x--; moved = true; }
-            if(e.key === "ArrowRight" && myData.x < 19) { myData.x++; moved = true; }
-            
-            if(moved) {
-                playerRef.set(myData);
-            }
+            if(e.key === "ArrowUp" && myData.dy === 0) { myData.dx = 0; myData.dy = -1; }
+            if(e.key === "ArrowDown" && myData.dy === 0) { myData.dx = 0; myData.dy = 1; }
+            if(e.key === "ArrowLeft" && myData.dx === 0) { myData.dx = -1; myData.dy = 0; }
+            if(e.key === "ArrowRight" && myData.dx === 0) { myData.dx = 1; myData.dy = 0; }
         });
 
-        function draw(players) {
-            // Ekranı temizle
+        // Ana Oyun Döngüsü (Her 150ms'de bir çalışır)
+        setInterval(() => {
+            // 1. Kendi konumumu ilerlet
+            myData.x += myData.dx;
+            myData.y += myData.dy;
+
+            // 2. Ekran dışına çıkma kontrolü
+            if(myData.x < 0) myData.x = 19;
+            if(myData.x > 19) myData.x = 0;
+            if(myData.y < 0) myData.y = 19;
+            if(myData.y > 19) myData.y = 0;
+
+            // 3. Yeni konumu Firebase'e gönder
+            playerRef.set(myData);
+
+            // 4. Ekranı çiz
+            draw();
+        }, 150);
+
+        function draw() {
             ctx.fillStyle = "black";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Izgara çizgileri
+            // Izgara
             ctx.strokeStyle = "#111";
             for(let i=0; i<400; i+=20) {
                 ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,400); ctx.stroke();
@@ -93,13 +97,9 @@
             }
 
             // Tüm oyuncuları çiz
-            Object.values(players).forEach(p => {
+            Object.values(allPlayers).forEach(p => {
                 ctx.fillStyle = p.color;
-                // Yılan kafasına parlama efekti
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = p.color;
                 ctx.fillRect(p.x * 20, p.y * 20, 19, 19);
-                ctx.shadowBlur = 0;
             });
         }
     </script>
