@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Reset Edition</title>
+    <title>Snake Royale - Final Fix</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -11,12 +11,13 @@
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
-        #player-list { margin: 20px 0; min-height: 50px; background: #151515; border-radius: 10px; }
+        #player-list { margin: 20px 0; min-height: 50px; background: #151515; border-radius: 10px; border: 1px solid #333; }
         .player-item { padding: 10px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
         .is-ready { color: #2ecc71; font-weight: bold; }
         .not-ready { color: #555; }
         #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; color: #f1c40f; display: none; z-index: 100; text-shadow: 0 0 30px black; pointer-events: none; }
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
         button#readyBtn.ready-on { background: #2ecc71; }
     </style>
 </head>
@@ -25,15 +26,15 @@
     <div id="login-view" class="screen">
         <h2>Snake Royale</h2>
         <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12">
-        <div>Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
-        <button onclick="joinLobby()">Lobiye Katıl</button>
+        <div style="margin-bottom:10px;">Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
+        <button id="mainJoinBtn" onclick="joinLobby()">Lobiye Katıl</button>
     </div>
 
     <div id="lobby-view" class="screen">
         <h3>Lobi</h3>
         <div id="player-list"></div>
         <button id="readyBtn" onclick="toggleReady()">HAZIR DEĞİL</button>
-        <p style="color:#666; font-size:11px; margin-top:10px;">Herkes hazır olunca başlar.</p>
+        <button onclick="leaveGame()" style="background:#444; margin-top:10px; font-size:12px;">Ayrıl</button>
     </div>
 
     <div id="game-screen">
@@ -42,7 +43,7 @@
         <div id="sidebar">
             <h4 style="border-bottom:1px solid #444; padding-bottom:10px;">Skorlar</h4>
             <div id="status-list"></div>
-            <button onclick="location.reload()" style="background:#444; margin-top:30px;">Çıkış Yap</button>
+            <button onclick="leaveGame()" style="background:#444; margin-top:30px;">Oyundan Çık</button>
         </div>
     </div>
 
@@ -62,12 +63,13 @@
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        const myId = Math.random().toString(36).substring(7);
-
+        
+        // Her girişte taze bir ID alalım
+        let myId = Math.random().toString(36).substring(7);
         let myData = { id: myId, name: "", color: "", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
         let allPlayers = {};
         let gameStatus = "waiting";
-        let localInLobby = false; // Tarayıcı kilidi
+        let localInLobby = false;
 
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -75,34 +77,40 @@
         const tileCount = 30;
 
         function joinLobby() {
-            const name = document.getElementById("usernameInput").value;
-            if(!name.trim()) return alert("İsim gir!");
+            const nameInput = document.getElementById("usernameInput");
+            if(!nameInput.value.trim()) return alert("İsim gir!");
             
-            myData.name = name;
+            // Butonu geçici olarak devre dışı bırak (çift tıklamayı önle)
+            document.getElementById("mainJoinBtn").disabled = true;
+            document.getElementById("mainJoinBtn").innerText = "Bağlanıyor...";
+
+            myData.name = nameInput.value;
             myData.color = document.getElementById("colorInput").value;
 
-            // ÖNCE TEMİZLİK: Eğer kimse yoksa veritabanını komple sıfırla
+            // Önce mevcut oyuncu var mı bak
             db.ref('players').once('value', snap => {
                 const count = snap.numChildren();
                 if (count === 0) {
-                    db.ref('/').set({ 
+                    // Veritabanı boşsa her şeyi resetle
+                    db.ref('/').update({ 
                         'game/state': { status: "waiting" },
                         'game/foods': null,
                         'players': null 
-                    }).then(registerAndEntry);
+                    }).then(completeJoin);
                 } else {
-                    registerAndEntry();
+                    completeJoin();
                 }
             });
         }
 
-        function registerAndEntry() {
+        function completeJoin() {
             localInLobby = true;
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
             
-            db.ref('players/' + myId).set(myData);
-            db.ref('players/' + myId).onDisconnect().remove();
+            const playerRef = db.ref('players/' + myId);
+            playerRef.set(myData);
+            playerRef.onDisconnect().remove();
         }
 
         function toggleReady() {
@@ -113,7 +121,14 @@
             db.ref('players/' + myId).update({ isReady: myData.isReady });
         }
 
-        // VERİ DİNLEME
+        function leaveGame() {
+            // Veritabanından sil ve sayfayı tamamen yenile
+            db.ref('players/' + myId).remove().then(() => {
+                window.location.reload();
+            });
+        }
+
+        // --- VERİ DİNLEME ---
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
             allPlayers = data;
@@ -124,9 +139,8 @@
             });
 
             updateLobbyUI();
-            updateSidebar();
+            updateSidebarUI();
 
-            // SADECE HERKES HAZIRSA BAŞLAT (Lobi Kilidi Açık Olmalı)
             if(localInLobby && total > 0 && ready === total && gameStatus === "waiting") {
                 const leader = Object.keys(data).sort()[0];
                 if(myId === leader) {
@@ -157,7 +171,7 @@
             }
         });
 
-        // --- DİĞER FONKSİYONLAR ---
+        // --- OYUN MANTIĞI VE ÇİZİM ---
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
         
         function updateLobbyUI() {
@@ -169,12 +183,12 @@
             });
         }
 
-        function updateSidebar() {
+        function updateSidebarUI() {
             const list = document.getElementById("status-list");
             list.innerHTML = "";
             Object.values(allPlayers).sort((a,b)=>b.maxLength-a.maxLength).forEach(p=>{
                 if(!p.name) return;
-                list.innerHTML += `<div class="${p.isDead?'dead':'alive'}">${p.name}: ${p.maxLength}</div>`;
+                list.innerHTML += `<div style="color:${p.color}; font-weight:bold; ${p.isDead?'text-decoration:line-through;opacity:0.5':''}">${p.name}: ${p.maxLength}</div>`;
             });
         }
 
@@ -207,10 +221,14 @@
             if(gameStatus === "playing" && !myData.isDead) {
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
+                
                 Object.values(allPlayers).forEach(p => {
                     if(!p.tail || p.isDead) return;
-                    p.tail.forEach(seg => { if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); });
+                    p.tail.forEach(seg => { 
+                        if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); 
+                    });
                 });
+
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
@@ -218,6 +236,7 @@
                         db.ref('game/foods').set(n);
                     }
                 });
+                
                 myData.tail.unshift({x:myData.x, y:myData.y});
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
