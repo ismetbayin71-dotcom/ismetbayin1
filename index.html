@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Boss & Apples Edition</title>
+    <title>Snake Royale - Müdür Edition</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -11,15 +11,21 @@
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
         input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
-        .player-item { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-        #boss-timer-display { color: #e74c3c; font-weight: bold; font-size: 18px; margin-top: 15px; padding: 10px; background: rgba(231, 76, 60, 0.1); border-radius: 5px; text-align: center; }
-        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; text-shadow: 0 0 30px rgba(0,0,0,1); }
-        #victory-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; animation: fadeInVictory 0.5s; }
-        #victory-image { width: 300px; height: auto; margin-bottom: 20px; border-radius: 15px; box-shadow: 0 0 30px rgba(241, 196, 15, 0.5); z-index: 210; }
+        #boss-timer-display { color: #e74c3c; font-weight: bold; font-size: 16px; margin-top: 15px; padding: 10px; background: rgba(231, 76, 60, 0.1); border-radius: 5px; text-align: center; border: 1px solid #e74c3c; }
+
+        /* ANA GERİ SAYIM */
+        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; }
+        
+        /* GERİLİM ARTIRAN ŞEFFAF GERİ SAYIM */
+        #tension-countdown { 
+            position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); 
+            font-size: 300px; font-weight: bold; color: rgba(231, 76, 60, 0.15); 
+            display: none; z-index: 50; pointer-events: none; font-family: 'Arial Black';
+        }
+
+        #victory-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; }
         #winner-name { color: #2ecc71; font-size: 60px; z-index: 210; }
-        #praise-text { font-size: 80px; font-weight: bold; color: #e74c3c; position: absolute; top: 20%; text-shadow: 0 0 20px rgba(231, 76, 60, 0.5); opacity: 0; z-index: 220; animation: praisePop 1s ease-out forwards 1.5s; }
-        @keyframes praisePop { 0% { opacity: 0; transform: scale(0.5) translateY(50px); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
-        .firework-particle { position: absolute; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; z-index: 205; animation: fireworkSparkle 1.5s ease-out forwards; }
+        .firework-particle { position: absolute; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; animation: fireworkSparkle 1.5s ease-out forwards; }
         @keyframes fireworkSparkle { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; } }
         button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         button#readyBtn.ready-on { background: #2ecc71; }
@@ -42,20 +48,21 @@
 
     <div id="game-screen">
         <div id="countdown">3</div>
+        <div id="tension-countdown"></div>
         <canvas id="gameCanvas" width="600" height="600"></canvas>
         <div id="sidebar">
             <h4 style="border-bottom:1px solid #444; padding-bottom:10px;">Skorlar</h4>
             <div id="status-list"></div>
-            <div id="boss-timer-display">BOSS: --</div>
+            <div id="boss-timer-display">MÜDÜR: --</div>
             <button onclick="leaveGame()" style="background:#444; margin-top:30px;">Oyundan Çık</button>
         </div>
     </div>
 
     <div id="victory-screen">
-        <div id="praise-text">e çok iyi</div> 
-        <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s">
+        <div id="praise-text" style="font-size:80px; color:#e74c3c;">e çok iyi</div> 
+        <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s" style="width:200px;">
         <div id="winner-name">...</div>
-        <p style="color:#aaa; margin-top:20px;">Lobiye dönülüyor...</p>
+        <p style="color:#aaa;">Lobiye dönülüyor...</p>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -89,18 +96,16 @@
 
         const bossImg = new Image();
         bossImg.src = 'boss.png'; 
-        let bossData = { active: false, x: 13, y: -6, dx: 0, dy: 1, tail: [], maxLength: 10, timer: 15 };
+        let bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, tail: [], maxLength: 15, timer: 15, state: "waiting", stayTimer: 15 };
 
         function joinLobby() {
             const nameInput = document.getElementById("usernameInput");
             if(!nameInput.value.trim()) return alert("İsim gir!");
             myData.name = nameInput.value;
             myData.color = document.getElementById("colorInput").value;
-            
             db.ref('players').once('value', snap => {
-                // Eğer kimse yoksa oyunu temizle ve ilk elmaları koy
                 if (snap.numChildren() === 0) {
-                    db.ref('/').update({ 'game/state': { status: "waiting", winner: "", bossTimer: 15 } });
+                    db.ref('/').update({ 'game/state': { status: "waiting", winner: "", bossTimer: 15, bossActive: false } });
                     resetFoods(); 
                 }
                 completeJoin();
@@ -129,17 +134,10 @@
             allPlayers = snap.val() || {};
             let pArr = Object.values(allPlayers);
             let total = pArr.length, ready = pArr.filter(p => p.isReady).length, alive = pArr.filter(p => !p.isDead).length;
-
-            updateLobbyUI();
-            updateSidebarUI();
-
+            updateLobbyUI(); updateSidebarUI();
             if(localInLobby && total >= 1 && ready === total && gameStatus === "waiting") {
-                if(myId === Object.keys(allPlayers).sort()[0]) {
-                    db.ref('game/state').update({ status: "counting" });
-                    resetFoods(); // Oyun başlarken elmaları tazele
-                }
+                if(myId === Object.keys(allPlayers).sort()[0]) db.ref('game/state').update({ status: "counting" });
             }
-
             if(gameStatus === "playing" && total > 1 && alive === 1) {
                 if(myId === Object.keys(allPlayers).sort()[0]) db.ref('game/state').update({ status: "finished", winner: pArr.find(p => !p.isDead).name });
             }
@@ -152,11 +150,23 @@
             if(state.status === "finished" && gameStatus !== "finished") showWinnerUI(state.winner);
             if(state.bossTimer !== undefined) {
                 bossData.timer = state.bossTimer;
-                document.getElementById("boss-timer-display").innerText = bossData.timer > 0 ? "BOSS: " + bossData.timer : "BOSS SAHADA!";
+                const display = document.getElementById("boss-timer-display");
+                const tension = document.getElementById("tension-countdown");
+                
+                if(bossData.timer > 0) {
+                    display.innerText = "MÜDÜR GELİYO: " + bossData.timer;
+                    if(bossData.timer <= 3 && gameStatus === "playing") {
+                        tension.innerText = bossData.timer;
+                        tension.style.display = "block";
+                    } else { tension.style.display = "none"; }
+                } else { 
+                    display.innerText = "MÜDÜR SAHADA!";
+                    tension.style.display = "none";
+                }
             }
+            bossData.active = state.bossActive || false;
         });
 
-        // ELMALARI VERİTABANINDAN ÇEKME (ÖNEMLİ!)
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
 
         function startCountdown() {
@@ -171,18 +181,30 @@
                 cd.innerText = c;
                 if(c === 0) { 
                     clearInterval(timer); cd.style.display = "none"; gameStatus = "playing"; 
-                    if(myId === Object.keys(allPlayers).sort()[0]) startBossCountdown();
+                    if(myId === Object.keys(allPlayers).sort()[0]) startBossLoop(15);
                 }
                 c--;
             }, 1000);
         }
 
-        function startBossCountdown() {
-            let bt = 15;
-            const bInterval = setInterval(() => {
-                bt--;
-                db.ref('game/state').update({ bossTimer: bt });
-                if(bt <= 0 || gameStatus !== "playing") clearInterval(bInterval);
+        // MÜDÜR DÖNGÜSÜ
+        function startBossLoop(startTime) {
+            let timeLeft = startTime;
+            const interval = setInterval(() => {
+                if(gameStatus !== "playing") { clearInterval(interval); return; }
+                
+                if(bossData.state === "waiting") {
+                    timeLeft--;
+                    db.ref('game/state').update({ bossTimer: timeLeft });
+                    if(timeLeft <= 0) {
+                        bossData.state = "entering";
+                        db.ref('game/state').update({ bossActive: true });
+                        bossData.stayTimer = 15; // 15 saniye kalacak
+                    }
+                } else if(bossData.state === "active") {
+                    bossData.stayTimer--;
+                    if(bossData.stayTimer <= 0) bossData.state = "exiting";
+                }
             }, 1000);
         }
 
@@ -191,16 +213,15 @@
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
 
-                if(bossData.timer <= 0) moveBoss();
+                if(bossData.active) moveBossLogic();
                 checkCollisions();
 
-                // Yemek Yeme Kontrolü
                 foods.forEach((f, i) => {
                     if(myData.x === f.x && myData.y === f.y) {
                         myData.maxLength++;
                         let n = [...foods]; 
                         n[i] = {x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)};
-                        db.ref('game/foods').set(n); // Yeni elmayı veritabanına yaz
+                        db.ref('game/foods').set(n);
                     }
                 });
 
@@ -211,16 +232,29 @@
             draw();
         }, 130);
 
-        function moveBoss() {
-            bossData.active = true;
-            if(Math.random() < 0.1) {
-                const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-                const d = dirs[Math.floor(Math.random()*4)];
-                bossData.dx = d.x; bossData.dy = d.y;
+        function moveBossLogic() {
+            if(bossData.state === "entering") {
+                bossData.y += 1;
+                if(bossData.y >= 5) bossData.state = "active";
+            } else if(bossData.state === "active") {
+                if(Math.random() < 0.15) {
+                    const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+                    const d = dirs[Math.floor(Math.random()*4)];
+                    bossData.dx = d.x; bossData.dy = d.y;
+                }
+                bossData.x += bossData.dx; bossData.y += bossData.dy;
+                if(bossData.x < 2) bossData.x = 2; if(bossData.x > 27) bossData.x = 27;
+                if(bossData.y < 2) bossData.y = 2; if(bossData.y > 27) bossData.y = 27;
+            } else if(bossData.state === "exiting") {
+                // Kapıya yönel (15, 0)
+                if(bossData.x < 15) bossData.x++; else if(bossData.x > 15) bossData.x--;
+                if(bossData.y > -6) bossData.y--;
+                if(bossData.y <= -6) {
+                    bossData.state = "waiting";
+                    db.ref('game/state').update({ bossActive: false, bossTimer: 60 });
+                    if(myId === Object.keys(allPlayers).sort()[0]) startBossLoop(60); // Bir dahaki geliş 1 dk sonra
+                }
             }
-            bossData.x += bossData.dx; bossData.y += bossData.dy;
-            if(bossData.x < 0) bossData.x = 0; if(bossData.x > 25) bossData.x = 25;
-            if(bossData.y < 0) bossData.y = 0; if(bossData.y > 25) bossData.y = 25;
 
             bossData.tail.unshift({x: bossData.x, y: bossData.y});
             if(bossData.tail.length > bossData.maxLength) bossData.tail.pop();
@@ -228,7 +262,8 @@
 
         function checkCollisions() {
             if(bossData.active) {
-                if(myData.x >= bossData.x && myData.x < bossData.x+5 && myData.y >= bossData.y && myData.y < bossData.y+5) die();
+                // Müdür kafası 5x5 alanı kaplıyor (Görseli ortaladığımız için merkez x,y)
+                if(myData.x >= bossData.x-2 && myData.x <= bossData.x+2 && myData.y >= bossData.y-2 && myData.y <= bossData.y+2) die();
                 bossData.tail.forEach(t => { if(myData.x === t.x && myData.y === t.y) die(); });
             }
             Object.values(allPlayers).forEach(p => {
@@ -242,13 +277,15 @@
             ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8); // Kapı
 
             if(bossData.active) {
-                ctx.fillStyle = "rgba(255,0,0,0.4)";
+                // Kuyruğu çiz
+                ctx.fillStyle = "rgba(255,0,0,0.5)";
                 bossData.tail.forEach(t => ctx.fillRect(t.x*grid, t.y*grid, grid-1, grid-1));
-                if(bossImg.complete) ctx.drawImage(bossImg, bossData.x*grid, bossData.y*grid, grid*5, grid*5);
-                else { ctx.fillStyle = "red"; ctx.fillRect(bossData.x*grid, bossData.y*grid, grid*5, grid*5); }
+                // Müdür kafasını çiz (Ortalanmış şekilde)
+                if(bossImg.complete) {
+                    ctx.drawImage(bossImg, (bossData.x - 2) * grid, (bossData.y - 2) * grid, grid * 5, grid * 5);
+                }
             }
 
-            // ELMALARI ÇİZ (KIRMIZI RENK)
             ctx.fillStyle = "#ff4757"; 
             foods.forEach(f => ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
 
@@ -257,6 +294,7 @@
                 p.tail.forEach((seg, i) => {
                     ctx.fillStyle = i === 0 ? p.color : p.color + "99";
                     ctx.fillRect(seg.x*grid+1, seg.y*grid+1, grid-2, grid-2);
+                    if(i === 0) { ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.fillText(p.name, seg.x*grid, seg.y*grid-5); }
                 });
             });
         }
@@ -268,9 +306,7 @@
             const vs = document.getElementById("victory-screen");
             document.getElementById("winner-name").innerText = name;
             vs.style.display = "flex";
-            const fw = setInterval(createFirework, 200);
             setTimeout(() => {
-                clearInterval(fw);
                 vs.style.display = "none";
                 document.getElementById("game-screen").style.display = "none";
                 document.getElementById("lobby-view").style.display = "block";
@@ -282,26 +318,9 @@
             myData.isReady = false; myData.isDead = false; myData.tail = []; myData.maxLength = 3;
             document.getElementById("readyBtn").innerText = "HAZIR DEĞİL";
             document.getElementById("readyBtn").classList.remove("ready-on");
-            bossData = { active: false, x: 13, y: -6, dx: 0, dy: 1, tail: [], maxLength: 10, timer: 15 };
+            bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, tail: [], maxLength: 15, timer: 15, state: "waiting", stayTimer: 15 };
             db.ref('players/' + myId).set(myData);
             gameStatus = "waiting";
-        }
-
-        function createFirework() {
-            const vs = document.getElementById("victory-screen");
-            const cx = Math.random() * vs.offsetWidth;
-            const cy = Math.random() * vs.offsetHeight * 0.5;
-            for (let i = 0; i < 25; i++) {
-                const p = document.createElement("div");
-                p.className = "firework-particle";
-                p.style.left = cx + "px"; p.style.top = cy + "px";
-                p.style.backgroundColor = `hsl(${Math.random()*360}, 100%, 50%)`;
-                const a = Math.random()*Math.PI*2, d = Math.random()*200+50;
-                p.style.setProperty("--dx", Math.cos(a)*d+"px");
-                p.style.setProperty("--dy", Math.sin(a)*d+"px");
-                vs.appendChild(p);
-                setTimeout(() => p.remove(), 1500);
-            }
         }
 
         function calculateSpawnPosition() {
@@ -310,8 +329,7 @@
         }
 
         function resetFoods() {
-            let f = []; 
-            for(let i=0; i<8; i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
+            let f = []; for(let i=0; i<8; i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
             db.ref('game/foods').set(f);
         }
 
