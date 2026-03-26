@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Pro Input System</title>
+    <title>Snake Royale - Ultimate Lobby Fix</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -66,11 +66,9 @@
         let myData = { id: myId, name: "", color: "", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
         let allPlayers = {};
         let gameStatus = "waiting";
-        let localInLobby = false;
+        let localInLobby = false; // ASIL KİLİT BU
+        let inputQueue = [];
         let foods = [];
-        
-        // HAMLE KUYRUĞU İÇİN DEĞİŞKENLER
-        let inputQueue = []; 
 
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -80,23 +78,24 @@
         function joinLobby() {
             const nameInput = document.getElementById("usernameInput");
             if(!nameInput.value.trim()) return alert("İsim gir!");
-            document.getElementById("mainJoinBtn").disabled = true;
+            
             myData.name = nameInput.value;
             myData.color = document.getElementById("colorInput").value;
 
+            // Giriş yapmadan önce lobi durumunu kontrol et
             db.ref('players').once('value', snap => {
-                if (snap.numChildren() === 0) {
-                    db.ref('/').update({ 'game/state': { status: "waiting" }, 'game/foods': null, 'players': null }).then(completeJoin);
-                } else { completeJoin(); }
+                if (!snap.exists()) {
+                    // Kimse yoksa oyun durumunu zorla sıfırla
+                    db.ref('game/state').set({ status: "waiting" });
+                }
+                
+                localInLobby = true; // Sadece butona basınca lobiye girişi onayla
+                document.getElementById("login-view").style.display = "none";
+                document.getElementById("lobby-view").style.display = "block";
+                
+                db.ref('players/' + myId).set(myData);
+                db.ref('players/' + myId).onDisconnect().remove();
             });
-        }
-
-        function completeJoin() {
-            localInLobby = true;
-            document.getElementById("login-view").style.display = "none";
-            document.getElementById("lobby-view").style.display = "block";
-            db.ref('players/' + myId).set(myData);
-            db.ref('players/' + myId).onDisconnect().remove();
         }
 
         function toggleReady() {
@@ -106,44 +105,66 @@
             db.ref('players/' + myId).update({ isReady: myData.isReady });
         }
 
-        function leaveGame() { db.ref('players/' + myId).remove().then(() => { window.location.reload(); }); }
+        function leaveGame() {
+            localInLobby = false;
+            db.ref('players/' + myId).remove().then(() => {
+                window.location.reload();
+            });
+        }
 
+        // VERİ TAKİBİ
         db.ref('players').on('value', snap => {
             const data = snap.val() || {};
             allPlayers = data;
+            
             let total = 0, ready = 0;
-            Object.values(data).forEach(p => { if(p.name) { total++; if(p.isReady) ready++; } });
+            Object.values(data).forEach(p => {
+                if(p.name) { total++; if(p.isReady) ready++; }
+            });
+
             updateLobbyUI();
             updateSidebarUI();
+
+            // Sadece lobi içindeyken ve herkes hazırsa başlat
             if(localInLobby && total > 0 && ready === total && gameStatus === "waiting") {
-                if(myId === Object.keys(data).sort()[0]) {
+                const leader = Object.keys(data).sort()[0];
+                if(myId === leader) {
                     db.ref('game/state').set({ status: "counting" });
                     resetFoods();
                 }
             }
         });
 
+        // OYUN DURUMU DİNLEYİCİSİ
         db.ref('game/state').on('value', snap => {
             const state = snap.val();
-            if(!state || !localInLobby) return; 
+            // EĞER localInLobby FALSE İSE GELEN SİNYALİ GÖRMEZDEN GEL
+            if(!state || !localInLobby) return;
+
             if(state.status === "counting" && gameStatus === "waiting") {
                 gameStatus = "counting";
                 document.getElementById("lobby-view").style.display = "none";
                 document.getElementById("game-screen").style.display = "flex";
                 calculateSpawnPosition();
+                
                 let c = 3;
                 const cd = document.getElementById("countdown");
                 cd.style.display = "block";
                 const timer = setInterval(() => {
                     cd.innerText = c;
-                    if(c === 0) { clearInterval(timer); cd.style.display = "none"; gameStatus = "playing"; }
+                    if(c === 0) { 
+                        clearInterval(timer); 
+                        cd.style.display = "none"; 
+                        gameStatus = "playing"; 
+                    }
                     c--;
                 }, 1000);
             }
         });
 
+        // --- DİĞER FONKSİYONLAR ---
         db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
-
+        
         function updateLobbyUI() {
             const list = document.getElementById("player-list");
             list.innerHTML = "";
@@ -169,7 +190,7 @@
             myData.y = Math.floor(15 + Math.sin((myIndex/playersArr.length)*Math.PI*2) * 8);
             myData.dx = (myData.x < 15) ? 1 : -1; myData.dy = 0;
             myData.isDead = false; myData.maxLength = 3; myData.tail = [{x:myData.x, y:myData.y}];
-            inputQueue = []; // Reset queue
+            inputQueue = [];
             db.ref('players/' + myId).set(myData);
         }
 
@@ -178,24 +199,18 @@
             db.ref('game/foods').set(f);
         }
 
-        // TUŞLARI KUYRUĞA ALAN YENİ SİSTEM
         document.addEventListener("keydown", e => {
             if(gameStatus !== "playing" || myData.isDead) return;
             const validKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
             if(validKeys.includes(e.key)) {
-                // Aynı tuşu veya zıt tuşu kuyruğa ekleme (Gereksiz hamle önleme)
                 const lastInput = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : null;
-                if (e.key !== lastInput) {
-                    inputQueue.push(e.key);
-                }
-                // Kuyruğun çok büyümesini engelle
+                if (e.key !== lastInput) inputQueue.push(e.key);
                 if(inputQueue.length > 2) inputQueue.shift();
             }
         });
 
         setInterval(() => {
             if(gameStatus === "playing" && !myData.isDead) {
-                // KUYRUĞU İŞLE: Her karede sadece 1 hamle yap
                 if (inputQueue.length > 0) {
                     const nextMove = inputQueue.shift();
                     if(nextMove === "ArrowUp" && myData.dy !== 1)    { myData.dx = 0; myData.dy = -1; }
