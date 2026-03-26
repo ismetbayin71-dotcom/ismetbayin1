@@ -2,18 +2,22 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Online Yılan Savaşı - Otomatik</title>
+    <title>Online Yılan Savaşı - Elmalı</title>
     <style>
         body { background: #1a1a1a; color: white; text-align: center; font-family: sans-serif; margin: 0; }
-        canvas { border: 5px solid #333; background: #000; margin-top: 20px; }
-        #status { font-size: 22px; margin: 15px; color: #2ecc71; }
+        canvas { border: 5px solid #333; background: #000; margin-top: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #ui { display: flex; justify-content: center; gap: 20px; font-size: 20px; margin: 10px; }
+        .score-box { padding: 5px 15px; border-radius: 5px; background: #333; }
     </style>
 </head>
 <body>
     <h1>Online Yılan Savaşı</h1>
-    <div id="status">Bağlanılıyor...</div>
+    <div id="ui">
+        <div id="status" class="score-box">Bağlanılıyor...</div>
+        <div class="score-box">Skorun: <span id="myScore">0</span></div>
+    </div>
     <canvas id="gameCanvas" width="400" height="400"></canvas>
-    <p>Ok tuşlarıyla yön ver. Yılan otomatik ilerler!</p>
+    <p>Ok tuşlarıyla yön ver. Elmayı kap, puanı kazan!</p>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
@@ -37,28 +41,30 @@
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const status = document.getElementById("status");
+        const scoreDisplay = document.getElementById("myScore");
 
-        // Yılanın durumu
-        let myData = {
-            id: myId,
-            x: 10, y: 10,
-            dx: 1, dy: 0, // Hareket yönü (başlangıçta sağa)
-            color: myColor
-        };
-
-        const playerRef = db.ref('players/' + myId);
-        playerRef.onDisconnect().remove();
-
+        let myData = { id: myId, x: 10, y: 10, dx: 1, dy: 0, color: myColor, score: 0 };
+        let food = { x: 5, y: 5 };
         let allPlayers = {};
 
-        // Veritabanını dinle
+        const playerRef = db.ref('players/' + myId);
+        const foodRef = db.ref('game/food');
+
+        playerRef.onDisconnect().remove();
+
+        // Veritabanını dinle (Oyuncular)
         db.ref('players').on('value', (snapshot) => {
             allPlayers = snapshot.val() || {};
-            const count = Object.keys(allPlayers).length;
-            status.innerText = "Online Oyuncu: " + count;
+            status.innerText = "Online: " + Object.keys(allPlayers).length;
         });
 
-        // Klavye ile sadece YÖN değiştir
+        // Veritabanını dinle (Yiyecek)
+        foodRef.on('value', (snapshot) => {
+            const newFood = snapshot.val();
+            if (newFood) food = newFood;
+        });
+
+        // Klavye Kontrolü
         document.addEventListener("keydown", e => {
             if(e.key === "ArrowUp" && myData.dy === 0) { myData.dx = 0; myData.dy = -1; }
             if(e.key === "ArrowDown" && myData.dy === 0) { myData.dx = 0; myData.dy = 1; }
@@ -66,22 +72,30 @@
             if(e.key === "ArrowRight" && myData.dx === 0) { myData.dx = 1; myData.dy = 0; }
         });
 
-        // Ana Oyun Döngüsü (Her 150ms'de bir çalışır)
+        function spawnFood() {
+            foodRef.set({
+                x: Math.floor(Math.random() * 20),
+                y: Math.floor(Math.random() * 20)
+            });
+        }
+
+        // Oyun Döngüsü
         setInterval(() => {
-            // 1. Kendi konumumu ilerlet
             myData.x += myData.dx;
             myData.y += myData.dy;
 
-            // 2. Ekran dışına çıkma kontrolü
-            if(myData.x < 0) myData.x = 19;
-            if(myData.x > 19) myData.x = 0;
-            if(myData.y < 0) myData.y = 19;
-            if(myData.y > 19) myData.y = 0;
+            // Ekran dışı kontrolü
+            if(myData.x < 0) myData.x = 19; if(myData.x > 19) myData.x = 0;
+            if(myData.y < 0) myData.y = 19; if(myData.y > 19) myData.y = 0;
 
-            // 3. Yeni konumu Firebase'e gönder
+            // Yiyecek yeme kontrolü
+            if(myData.x === food.x && myData.y === food.y) {
+                myData.score += 10;
+                scoreDisplay.innerText = myData.score;
+                spawnFood(); // Yeni yiyecek konumunu Firebase'e gönder
+            }
+
             playerRef.set(myData);
-
-            // 4. Ekranı çiz
             draw();
         }, 150);
 
@@ -96,10 +110,16 @@
                 ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(400,i); ctx.stroke();
             }
 
-            // Tüm oyuncuları çiz
+            // Yiyecek (Elma)
+            ctx.fillStyle = "#ff4757";
+            ctx.beginPath();
+            ctx.arc(food.x * 20 + 10, food.y * 20 + 10, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Oyuncular
             Object.values(allPlayers).forEach(p => {
                 ctx.fillStyle = p.color;
-                ctx.fillRect(p.x * 20, p.y * 20, 19, 19);
+                ctx.fillRect(p.x * 20 + 1, p.y * 20 + 1, 18, 18);
             });
         }
     </script>
