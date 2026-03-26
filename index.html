@@ -2,415 +2,207 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Victory & Fireworks Edition</title>
+    <title>Snake Royale - BOSS UPDATE</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-        
-        /* EKRAN YÖNETİMİ */
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
-        #login-view { display: block; } /* Sadece login açık başlar */
-        
-        #game-screen { background: transparent; border: none; width: auto; box-shadow: none; display: none; flex-direction: row; gap: 20px; position: relative; }
-        
+        #login-view { display: block; }
+        #game-screen { background: transparent; border: none; width: auto; display: none; flex-direction: row; gap: 20px; position: relative; }
         canvas { border: 5px solid #333; background: #000; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
         #sidebar { width: 220px; background: #1e1e1e; padding: 20px; border-radius: 10px; border: 2px solid #333; text-align: left; }
+        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; }
+        #boss-timer { color: #e74c3c; font-weight: bold; font-size: 18px; margin-top: 10px; }
         
-        input[type="text"] { padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: white; width: 85%; margin-bottom: 15px; }
-        .player-item { padding: 8px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
-        .alive { color: #2ecc71; font-weight: bold; margin-bottom: 5px; }
-        .dead { color: #ff4757; text-decoration: line-through; opacity: 0.6; margin-bottom: 5px; }
-        
-        /* GERİ SAYIM METNİ */
-        #countdown { position: absolute; top: 50%; left: 40%; transform: translate(-50%, -50%); font-size: 150px; font-weight: bold; color: #f1c40f; display: none; z-index: 100; pointer-events: none; text-shadow: 0 0 30px rgba(0,0,0,1); }
-        
-        /* KAZANAN EKRANI STİLİ */
-        #victory-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); /* Yarı saydam siyah arka plan */
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 200; /* Her şeyin üzerinde */
-            animation: fadeInVictory 0.5s; /* Hafif belirme efekti */
-        }
-        @keyframes fadeInVictory { from { opacity: 0; } to { opacity: 1; } }
-        
-        #victory-image { width: 300px; height: auto; margin-bottom: 20px; border-radius: 15px; box-shadow: 0 0 30px rgba(241, 196, 15, 0.5); z-index: 210; }
-        #victory-text { font-size: 48px; font-weight: bold; color: #f1c40f; text-shadow: 0 0 20px rgba(0,0,0,1); z-index: 210; }
-        #winner-name { color: #2ecc71; font-size: 60px; z-index: 210; }
-        
-        /* "e çok iyi" YAZISI STİLİ VE ANİMASYONU */
-        #praise-text {
-            font-size: 80px; font-weight: bold; color: #e74c3c;
-            position: absolute; top: 20%;
-            text-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
-            opacity: 0;
-            z-index: 220;
-            animation: praisePop 1s ease-out forwards 1.5s; /* 1.5 saniye gecikmeyle belirir */
-        }
-        @keyframes praisePop {
-            0% { opacity: 0; transform: scale(0.5) translateY(50px); }
-            70% { opacity: 1; transform: scale(1.1) translateY(0); }
-            100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-
-        /* HAVAİ FİŞEK PARTİKÜL STİLİ VE ANİMASYONU */
-        .firework-particle {
-            position: absolute;
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            pointer-events: none; /* Tıklamayı engelle */
-            z-index: 205; /* Resmin arkasında, ekranın üzerinde */
-            animation: fireworkSparkle 1.5s ease-out forwards;
-        }
-        @keyframes fireworkSparkle {
-            0% {
-                transform: translate(0, 0) scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: translate(var(--dx), var(--dy)) scale(0);
-                opacity: 0;
-            }
-        }
-        
-        button { padding: 12px 25px; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
-        button#readyBtn.ready-on { background: #2ecc71; } /* Hazır olunca yeşil buton */
+        /* Kazanan Ekranı */
+        #victory-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; }
+        #victory-image { width: 250px; border-radius: 15px; }
+        #praise-text { font-size: 60px; color: #e74c3c; font-weight: bold; margin-top: 20px; }
     </style>
 </head>
 <body>
 
     <div id="login-view" class="screen">
         <h2>Snake Royale</h2>
-        <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12">
-        <div style="margin-bottom:10px;">Renk: <input type="color" id="colorInput" value="#2ecc71"></div>
-        <button id="mainJoinBtn" onclick="joinLobby()">Lobiye Katıl</button>
+        <input type="text" id="usernameInput" placeholder="Kullanıcı Adın" maxlength="12" style="padding:10px; width:80%;">
+        <br><br>
+        <button onclick="joinLobby()" style="padding:10px 20px; cursor:pointer;">Lobiye Katıl</button>
     </div>
 
     <div id="lobby-view" class="screen">
         <h3>Lobi</h3>
         <div id="player-list"></div>
-        <button id="readyBtn" onclick="toggleReady()">HAZIR DEĞİL</button>
-        <button onclick="leaveGame()" style="background:#444; margin-top:10px; font-size:12px;">Ayrıl</button>
+        <button id="readyBtn" onclick="toggleReady()" style="padding:10px 20px; margin-top:20px;">HAZIR DEĞİL</button>
     </div>
 
     <div id="game-screen">
         <div id="countdown">3</div>
         <canvas id="gameCanvas" width="600" height="600"></canvas>
         <div id="sidebar">
-            <h4 style="border-bottom:1px solid #444; padding-bottom:10px;">Skorlar</h4>
+            <h4>Skor Tablosu</h4>
             <div id="status-list"></div>
-            <button onclick="leaveGame()" style="background:#444; margin-top:30px;">Oyundan Çık</button>
+            <div id="boss-timer">BOSS GELİYOR: --</div>
         </div>
     </div>
 
     <div id="victory-screen">
-        <div id="praise-text">e çok iyi</div> <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s" alt="Kupa">
-        <div id="victory-text">KAZANAN</div>
-        <div id="winner-name">...</div>
-        <p style="color:#aaa; margin-top:20px;">Lobiye dönülüyor...</p>
+        <div id="praise-text">e çok iyi</div>
+        <img id="victory-image" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR3ezpyHQqRx8RR8qIuLyMRhCmfxnt3YOsISA&s">
+        <h1 id="winner-name" style="color:#f1c40f"></h1>
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyBktCn2NgiO0zWrZCSHLsjTXvhkNRDNSi4",
-            authDomain: "snake-e0eac.firebaseapp.com",
-            databaseURL: "https://snake-e0eac-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "snake-e0eac",
-            storageBucket: "snake-e0eac.firebasestorage.app",
-            messagingSenderId: "788073914029",
-            appId: "1:788073914029:web:dd7fcb83d11483ef31f024"
-        };
-
+        // Firebase ayarlarını buraya kendi bilgilerinle tekrar ekle (yukarıdaki koddan kopyala)
+        const firebaseConfig = { /* ... senin config bilgilerin ... */ };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
-        
-        let myId = Math.random().toString(36).substring(7);
-        let myData = { id: myId, name: "", color: "", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
-        let allPlayers = {};
-        let gameStatus = "waiting"; 
-        let localInLobby = false;
-        let inputQueue = [];
-        let foods = [];
 
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
+        let myId = Math.random().toString(36).substring(7);
+        let myData = { id: myId, name: "", color: "#2ecc71", x: 0, y: 0, dx: 1, dy: 0, tail: [], maxLength: 3, isDead: false, isReady: false };
+        let allPlayers = {};
+        let gameStatus = "waiting";
+        let foods = [];
         const grid = 20;
         const tileCount = 30;
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // BOSS AYARLARI
+        const bossImg = new Image();
+        bossImg.src = 'boss.png'; // GitHub ana klasöründeki dosya
+        let bossSnake = {
+            active: false,
+            x: 13, y: -5, // Kapının dışında başlar
+            dx: 0, dy: 1,
+            tail: [],
+            maxLength: 10,
+            timer: 15
+        };
 
         function joinLobby() {
-            const nameInput = document.getElementById("usernameInput");
-            if(!nameInput.value.trim()) return alert("İsim gir!");
-            document.getElementById("mainJoinBtn").disabled = true;
-            myData.name = nameInput.value;
-            myData.color = document.getElementById("colorInput").value;
-
-            db.ref('players').once('value', snap => {
-                if (snap.numChildren() === 0) {
-                    db.ref('/').update({ 'game/state': { status: "waiting", winner: "" }, 'game/foods': null, 'players': null }).then(completeJoin);
-                } else { completeJoin(); }
-            });
-        }
-
-        function completeJoin() {
-            localInLobby = true;
+            myData.name = document.getElementById("usernameInput").value;
+            if(!myData.name) return;
             document.getElementById("login-view").style.display = "none";
             document.getElementById("lobby-view").style.display = "block";
-            
-            const playerRef = db.ref('players/' + myId);
-            playerRef.set(myData);
-            playerRef.onDisconnect().remove();
+            db.ref('players/' + myId).set(myData);
+            db.ref('players/' + myId).onDisconnect().remove();
         }
 
         function toggleReady() {
             myData.isReady = !myData.isReady;
-            const btn = document.getElementById("readyBtn");
-            btn.innerText = myData.isReady ? "HAZIRSIN" : "HAZIR DEĞİL";
-            btn.classList.toggle("ready-on", myData.isReady);
+            document.getElementById("readyBtn").innerText = myData.isReady ? "HAZIRSIN" : "HAZIR DEĞİL";
             db.ref('players/' + myId).update({ isReady: myData.isReady });
         }
 
-        function leaveGame() {
-            db.ref('players/' + myId).remove().then(() => { window.location.reload(); });
-        }
-
-        db.ref('players').on('value', snap => {
-            const data = snap.val() || {};
-            allPlayers = data;
-            let total = 0, ready = 0, aliveCount = 0, lastAlive = null;
-            Object.values(data).forEach(p => {
-                if(p.name) { 
-                    total++; 
-                    if(p.isReady) ready++; 
-                    if(!p.isDead) { aliveCount++; lastAlive = p; }
-                }
-            });
-
-            updateLobbyUI();
-            updateSidebarUI();
-
-            if(localInLobby && total >= 1 && ready === total && gameStatus === "waiting") {
-                const leader = Object.keys(data).sort()[0];
-                if(myId === leader) {
-                    db.ref('game/state').set({ status: "counting", winner: "" });
-                    resetFoods();
-                }
-            }
-
-            // Kazanan Kontrolü
-            if(gameStatus === "playing" && total > 1 && aliveCount === 1) {
-                const leader = Object.keys(data).sort()[0];
-                if(myId === leader) {
-                    db.ref('game/state').update({ status: "finished", winner: lastAlive.name });
-                }
-            } else if(gameStatus === "playing" && total >= 1 && aliveCount === 0) {
-                 const leader = Object.keys(data).sort()[0];
-                 if(myId === leader) db.ref('game/state').update({ status: "finished", winner: "BERABERE" });
-            }
-        });
-
-        db.ref('game/state').on('value', snap => {
-            const state = snap.val();
-            if(!state || !localInLobby) return;
-
-            if(state.status === "counting" && gameStatus === "waiting") {
-                startCountdown();
-            }
-            if(state.status === "finished" && gameStatus !== "finished") {
-                showWinnerUI(state.winner); // Kazanan ekranını aç
-            }
-            if(state.status === "waiting") {
-                gameStatus = "waiting";
-            }
-        });
-
-        function startCountdown() {
-            gameStatus = "counting";
-            document.getElementById("lobby-view").style.display = "none";
-            document.getElementById("game-screen").style.display = "flex";
-            calculateSpawnPosition();
-            
-            let c = 3;
-            const cd = document.getElementById("countdown");
-            cd.style.display = "block";
-            const timer = setInterval(() => {
-                cd.innerText = c;
-                if(c === 0) { clearInterval(timer); cd.style.display = "none"; gameStatus = "playing"; }
-                c--;
-            }, 1000);
-        }
-
-        // HAVAİ FİŞEK OLUŞTURAN FONKSİYON
-        function createFirework() {
-            const victoryScreen = document.getElementById("victory-screen");
-            
-            // Patlama merkezini rastgele belirle (ekranın üst yarısında)
-            const centerX = Math.random() * victoryScreen.offsetWidth;
-            const centerY = Math.random() * victoryScreen.offsetHeight * 0.5;
-            
-            // Rastgele renk seç (neon renkler)
-            const colors = ["#ff00ff", "#00ffff", "#ffff00", "#ff0000", "#00ff00"];
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            
-            // 30 partikül oluştur
-            for (let i = 0; i < 30; i++) {
-                const particle = document.createElement("div");
-                particle.classList.add("firework-particle");
-                
-                // Konumu ve rengi ata
-                particle.style.left = centerX + "px";
-                particle.style.top = centerY + "px";
-                particle.style.backgroundColor = color;
-                
-                // Dağılma yönünü ve mesafesini rastgele belirle (CSS değişkeni olarak)
-                const angle = Math.random() * Math.PI * 2;
-                const distance = Math.random() * 200 + 50; // 50 ile 250px arası
-                particle.style.setProperty("--dx", Math.cos(angle) * distance + "px");
-                particle.style.setProperty("--dy", Math.sin(angle) * distance + "px");
-                
-                // Partikülü ekrana ekle
-                victoryScreen.appendChild(particle);
-                
-                // Animasyon bitince partikülü sil (hafıza temizliği)
-                setTimeout(() => { particle.remove(); }, 1500);
-            }
-        }
-
-        // KAZANAN EKRANINI GÖSTEREN FONKSİYON (GÜNCELLENDİ)
-        function showWinnerUI(name) {
-            gameStatus = "finished";
-            const victoryScreen = document.getElementById("victory-screen");
-            const winnerNameDiv = document.getElementById("winner-name");
-            
-            winnerNameDiv.innerText = name; // Kazananın ismini yaz
-            victoryScreen.style.display = "flex"; // Ekranı aç
-            
-            // Havai fişekleri patlat (3 saniye boyunca her 200ms'de bir patlama)
-            const fireworkInterval = setInterval(createFirework, 200);
-            setTimeout(() => { clearInterval(fireworkInterval); }, 3000);
-            
-            // 6 Saniye sonra lobiye dön (Animasyonlar ve şölen için süreyi uzattık)
-            setTimeout(() => {
-                victoryScreen.style.display = "none"; // Ekranı kapat
-                document.getElementById("game-screen").style.display = "none";
-                document.getElementById("lobby-view").style.display = "block";
-                
-                // Durumu lobi için sıfırla
-                myData.isReady = false;
-                myData.isDead = false;
-                myData.tail = [];
-                myData.maxLength = 3;
-                document.getElementById("readyBtn").innerText = "HAZIR DEĞİL";
-                document.getElementById("readyBtn").classList.remove("ready-on");
-                
-                db.ref('players/' + myId).set(myData);
-                gameStatus = "waiting";
-
-                // Eğer odanın lideriyse oyun durumunu da "bekleme"ye çek
-                const leader = Object.keys(allPlayers).sort()[0];
-                if(myId === leader) {
-                    db.ref('game/state').set({ status: "waiting", winner: "" });
-                }
-            }, 6000); // 5 saniye -> 6 saniye
-        }
-
-        db.ref('game/foods').on('value', snap => { foods = snap.val() || []; });
-        
-        function updateLobbyUI() {
-            const list = document.getElementById("player-list");
-            list.innerHTML = "";
-            Object.values(allPlayers).forEach(p => {
-                if(!p.name) return;
-                list.innerHTML += `<div class="player-item"><span>${p.name}</span><span class="${p.isReady?'is-ready':'not-ready'}">${p.isReady?'HAZIR':'...'}</span></div>`;
-            });
-        }
-
-        function updateSidebarUI() {
-            const list = document.getElementById("status-list");
-            list.innerHTML = "";
-            Object.values(allPlayers).sort((a,b)=>b.maxLength-a.maxLength).forEach(p=>{
-                if(!p.name) return;
-                list.innerHTML += `<div style="color:${p.color}; font-weight:bold; ${p.isDead?'text-decoration:line-through;opacity:0.5':''}">${p.name}: ${p.maxLength}</div>`;
-            });
-        }
-
-        function calculateSpawnPosition() {
-            const playersArr = Object.keys(allPlayers).sort();
-            const myIndex = playersArr.indexOf(myId);
-            const angle = (myIndex / (playersArr.length || 1)) * Math.PI * 2;
-            myData.x = Math.floor(15 + Math.cos(angle) * 8);
-            myData.y = Math.floor(15 + Math.sin(angle) * 8);
-            myData.dx = (myData.x < 15) ? 1 : -1; myData.dy = 0;
-            myData.isDead = false; myData.maxLength = 3; myData.tail = [{x:myData.x, y:myData.y}];
-            inputQueue = [];
-            db.ref('players/' + myId).set(myData);
-        }
-
-        function resetFoods() {
-            let f = []; for(let i=0;i<8;i++) f.push({x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)});
-            db.ref('game/foods').set(f);
-        }
-
-        document.addEventListener("keydown", e => {
-            if(gameStatus !== "playing" || myData.isDead) return;
-            const validKeys = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
-            if(validKeys.includes(e.key)) {
-                const lastInput = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : null;
-                if (e.key !== lastInput) inputQueue.push(e.key);
-                if(inputQueue.length > 2) inputQueue.shift();
-            }
-        });
-
+        // Oyun Döngüsü ve Boss Mantığı
         setInterval(() => {
-            if(gameStatus === "playing" && !myData.isDead) {
-                if (inputQueue.length > 0) {
-                    const nextMove = inputQueue.shift();
-                    if(nextMove === "ArrowUp" && myData.dy !== 1)    { myData.dx = 0; myData.dy = -1; }
-                    else if(nextMove === "ArrowDown" && myData.dy !== -1) { myData.dx = 0; myData.dy = 1; }
-                    else if(nextMove === "ArrowLeft" && myData.dx !== 1)  { myData.dx = -1; myData.dy = 0; }
-                    else if(nextMove === "ArrowRight" && myData.dx !== -1) { myData.dx = 1; myData.dy = 0; }
+            if(gameStatus === "playing") {
+                // Boss Zamanlayıcı Kontrolü (Sadece lider yönetir)
+                const leader = Object.keys(allPlayers).sort()[0];
+                if(myId === leader && bossSnake.timer > 0) {
+                    bossSnake.timer -= 0.13; // Saniyede yaklaşık bir düşüş
+                    db.ref('game/boss').update({ timer: Math.ceil(bossSnake.timer) });
                 }
 
-                myData.x = (myData.x + myData.dx + tileCount) % tileCount;
-                myData.y = (myData.y + myData.dy + tileCount) % tileCount;
+                if(bossSnake.timer <= 0 && !bossSnake.active) {
+                    bossSnake.active = true;
+                }
 
-                Object.values(allPlayers).forEach(p => {
-                    if(!p.tail || p.isDead) return;
-                    p.tail.forEach(seg => { if(myData.x === seg.x && myData.y === seg.y && (p.id !== myId || myData.tail.length > 2)) die(); });
-                });
+                if(bossSnake.active) {
+                    moveBoss();
+                }
 
-                foods.forEach((f, i) => {
-                    if(myData.x === f.x && myData.y === f.y) {
-                        myData.maxLength++;
-                        let n = [...foods]; n[i] = {x:Math.floor(Math.random()*tileCount), y:Math.floor(Math.random()*tileCount)};
-                        db.ref('game/foods').set(n);
-                    }
-                });
-                
-                myData.tail.unshift({x:myData.x, y:myData.y});
-                while(myData.tail.length > myData.maxLength) myData.tail.pop();
-                db.ref('players/' + myId).set(myData);
+                if(!myData.isDead) {
+                    movePlayer();
+                    checkBossCollision();
+                }
             }
             draw();
         }, 130);
 
-        function die() { myData.isDead = true; db.ref('players/' + myId).update({ isDead: true }); }
-        
-        function draw() {
-            ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = "#111";
-            for(let i=0;i<canvas.width;i+=grid){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,600);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(600,i);ctx.stroke();}
-            ctx.fillStyle = "#ff4757"; foods.forEach(f=>ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
-            Object.values(allPlayers).forEach(p => {
-                if(!p.tail || p.isDead || !p.name) return;
-                p.tail.forEach((seg, i) => {
-                    ctx.fillStyle = i === 0 ? p.color : p.color + "99";
-                    ctx.fillRect(seg.x*grid+1, seg.y*grid+1, grid-2, grid-2);
-                    if(i === 0) { ctx.fillStyle = "white"; ctx.font = "10px Arial"; ctx.fillText(p.name, seg.x*grid, seg.y*grid-5); }
-                });
+        function moveBoss() {
+            // Boss rastgele hareket yapay zekası
+            if(Math.random() < 0.05) { // %5 ihtimalle yön değiştir
+                const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+                const newDir = dirs[Math.floor(Math.random()*dirs.length)];
+                bossSnake.dx = newDir.x; bossSnake.dy = newDir.y;
+            }
+
+            bossSnake.x += bossSnake.dx;
+            bossSnake.y += bossSnake.dy;
+
+            // Kenarlardan dönme (5x5 kafa olduğu için kenar payı bırakıyoruz)
+            if(bossSnake.x < 0) bossSnake.dx = 1;
+            if(bossSnake.x > tileCount - 5) bossSnake.dx = -1;
+            if(bossSnake.y < 0) bossSnake.dy = 1;
+            if(bossSnake.y > tileCount - 5) bossSnake.dy = -1;
+
+            bossSnake.tail.unshift({x: bossSnake.x, y: bossSnake.y});
+            if(bossSnake.tail.length > bossSnake.maxLength) bossSnake.tail.pop();
+        }
+
+        function checkBossCollision() {
+            // Boss kafası 5x5 olduğu için kontrol alanı:
+            const bx = bossSnake.x;
+            const by = bossSnake.y;
+
+            // Oyuncunun kafası Boss'un 5x5'lik alanına girdi mi?
+            if(myData.x >= bx && myData.x < bx+5 && myData.y >= by && myData.y < by+5) {
+                die();
+            }
+
+            // Boss'un kuyruğuna çarptı mı?
+            bossSnake.tail.forEach(seg => {
+                if(myData.x === seg.x && myData.y === seg.y) die();
             });
         }
+
+        function draw() {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Kapıyı çiz (Üst orta)
+            ctx.fillStyle = "#333";
+            ctx.fillRect(13 * grid, 0, 4 * grid, 10); // Giriş kapısı
+
+            // Boss'u çiz
+            if(bossSnake.active) {
+                // Kuyruk
+                ctx.fillStyle = "#4a0000";
+                bossSnake.tail.forEach(seg => {
+                    ctx.fillRect(seg.x * grid, seg.y * grid, grid-1, grid-1);
+                });
+                // 5x5 Devasa Kafa
+                if(bossImg.complete) {
+                    ctx.drawImage(bossImg, bossSnake.x * grid, bossSnake.y * grid, grid * 5, grid * 5);
+                } else {
+                    ctx.fillStyle = "red";
+                    ctx.fillRect(bossSnake.x * grid, bossSnake.y * grid, grid * 5, grid * 5);
+                }
+            }
+
+            // Oyuncuları çiz (Önceki kodundaki çizim mantığı)
+            Object.values(allPlayers).forEach(p => {
+                if(p.isDead || !p.tail) return;
+                ctx.fillStyle = p.color;
+                p.tail.forEach(s => ctx.fillRect(s.x*grid, s.y*grid, grid-1, grid-1));
+            });
+            
+            // Yemekleri çiz
+            ctx.fillStyle = "gold";
+            foods.forEach(f => ctx.fillRect(f.x*grid, f.y*grid, grid-1, grid-1));
+        }
+
+        // Firebase dinleyicileri (timer güncellemesi için)
+        db.ref('game/boss/timer').on('value', snap => {
+            let t = snap.val();
+            document.getElementById("boss-timer").innerText = t > 0 ? "BOSS GELİYOR: " + t : "BOSS SAHADA!";
+            bossSnake.timer = t;
+        });
+
+        // ... Diğer fonksiyonlar (movePlayer, die, updateUI vb. önceki koddan aynen devam edecek)
     </script>
 </body>
 </html>
