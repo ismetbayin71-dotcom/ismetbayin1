@@ -189,10 +189,8 @@
             gameStatus = "counting";
             document.getElementById("lobby-view").style.display = "none";
             document.getElementById("game-screen").style.display = "flex";
-            
-            // KONUMLARI HEMEN BELİRLE Kİ GERİ SAYIMDA GÖZÜKSÜN
             calculateSpawnPosition();
-            myData.isDead = false; // Ölü olma durumunu sıfırla
+            myData.isDead = false;
             db.ref('players/' + myId).set(myData); 
 
             let c = 3;
@@ -231,7 +229,6 @@
         }
 
         setInterval(() => {
-            // SADECE PLAYING DURUMUNDA HAREKET ET
             if(gameStatus === "playing" && !myData.isDead) {
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
@@ -248,7 +245,6 @@
                 while(myData.tail.length > myData.maxLength) myData.tail.pop();
                 db.ref('players/' + myId).set(myData);
             }
-            // DRAW HER ZAMAN ÇALIŞIR (Counting dahil)
             draw();
         }, 130);
 
@@ -291,10 +287,16 @@
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8); 
             
-            // ELMALARI ÇİZ
-            ctx.fillStyle = "#ff4757"; foods.forEach(f => ctx.fillRect(f.x*grid+2, f.y*grid+2, grid-4, grid-4));
+            // SIGARA ÇİZİMİ (ESKİ ELMA)
+            foods.forEach(f => {
+                // Gövde (Beyaz)
+                ctx.fillStyle = "#ecf0f1";
+                ctx.fillRect(f.x * grid + 2, f.y * grid + 7, 12, 6);
+                // Filtre (Turuncu)
+                ctx.fillStyle = "#d35400";
+                ctx.fillRect(f.x * grid + 14, f.y * grid + 7, 4, 6);
+            });
 
-            // YILANLARI ÇİZ (Hem Counting hem Playing durumunda)
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
                 p.tail.forEach((seg, i) => {
