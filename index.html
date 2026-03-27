@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Royale - Müdür Kaos Edition</title>
+    <title>Snake Royale - Hiperaktif Müdür Edition</title>
     <style>
         body { background: #121212; color: white; text-align: center; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
         .screen { background: #1e1e1e; padding: 40px; border-radius: 20px; border: 2px solid #333; width: 350px; box-shadow: 0 0 50px rgba(0,0,0,0.5); display: none; }
@@ -76,6 +76,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
     <script>
+        // FIREBASE AYARLARI (Sen aksini söyleyene kadar değişmez)
         const firebaseConfig = {
             apiKey: "AIzaSyBktCn2NgiO0zWrZCSHLsjTXvhkNRDNSi4",
             authDomain: "snake-e0eac.firebaseapp.com",
@@ -85,7 +86,6 @@
             messagingSenderId: "788073914029",
             appId: "1:788073914029:web:dd7fcb83d11483ef31f024"
         };
-
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
@@ -96,7 +96,7 @@
         let localInLobby = false;
         let foods = [];
         let bossArrivalAnnounced = false;
-        let canChangeDirection = true; // HIZLI BASIŞ SORUNUNU ÇÖZEN KİLİT
+        let canChangeDirection = true; // Yön kilidi
 
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -104,7 +104,8 @@
         const tileCount = 30;
 
         const bossImg = new Image(); bossImg.src = 'boss.png'; 
-        let bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, tail: [], maxLength: 15, timer: 15, state: "waiting", stayTimer: 15 };
+        // MÜDÜR VERİLERİ (Kuyruk kaldırıldı)
+        let bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, timer: 15, state: "waiting", stayTimer: 15 };
         let bossInterval = null;
 
         function joinLobby() {
@@ -202,9 +203,7 @@
             const timer = setInterval(() => {
                 c--;
                 if(c <= 0) { 
-                    clearInterval(timer); 
-                    cd.style.display = "none"; 
-                    gameStatus = "playing"; 
+                    clearInterval(timer); cd.style.display = "none"; gameStatus = "playing"; 
                     if(myId === Object.keys(allPlayers).sort()[0]) startBossLoop(15); 
                 } else {
                     cd.innerText = c;
@@ -233,9 +232,7 @@
             if(gameStatus === "playing" && !myData.isDead) {
                 myData.x = (myData.x + myData.dx + tileCount) % tileCount;
                 myData.y = (myData.y + myData.dy + tileCount) % tileCount;
-                
-                // HAREKET TAMAMLANDI, YENİ YÖN GİRİŞİNE İZİN VER
-                canChangeDirection = true;
+                canChangeDirection = true; // Yön kilidini aç
 
                 if(bossData.active) moveBossLogic();
                 checkCollisions();
@@ -253,15 +250,20 @@
             draw();
         }, 130);
 
+        // MÜDÜR HAREKET YAPAY ZEKASI (YENİLENDİ: Daha agresif)
         function moveBossLogic() {
-            if(bossData.state === "entering") { bossData.y += 1; if(bossData.y >= 5) bossData.state = "active"; }
-            else if(bossData.state === "active") {
-                if(Math.random() < 0.15) {
+            if(bossData.state === "entering") {
+                bossData.y += 1;
+                if(bossData.y >= 5) bossData.state = "active";
+            } else if(bossData.state === "active") {
+                // Hareketsiz durmayı engellemek için %70 ihtimalle yön değiştir (eskisi %15'ti)
+                if(Math.random() < 0.7) {
                     const dirs = [{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
                     const d = dirs[Math.floor(Math.random()*4)];
                     bossData.dx = d.x; bossData.dy = d.y;
                 }
                 bossData.x += bossData.dx; bossData.y += bossData.dy;
+                // Sınır kontrolleri (Görsel 5x5 olduğu için 2 grid pay bırakıyoruz)
                 if(bossData.x < 2) bossData.x = 2; if(bossData.x > 27) bossData.x = 27;
                 if(bossData.y < 2) bossData.y = 2; if(bossData.y > 27) bossData.y = 27;
             } else if(bossData.state === "exiting") {
@@ -273,14 +275,14 @@
                     if(myId === Object.keys(allPlayers).sort()[0]) startBossLoop(60);
                 }
             }
-            bossData.tail.unshift({x: bossData.x, y: bossData.y});
-            if(bossData.tail.length > bossData.maxLength) bossData.tail.pop();
+            // Kuyruk güncellemesi kaldırıldı
         }
 
+        // ÇARPIŞMA KONTROLLERİ (Müdür kuyruğu kaldırıldı)
         function checkCollisions() {
             if(bossData.active) {
+                // Sadece PNG'ye (5x5 kafa alanı) çarpma kontrolü
                 if(myData.x >= bossData.x-2 && myData.x <= bossData.x+2 && myData.y >= bossData.y-2 && myData.y <= bossData.y+2) die();
-                bossData.tail.forEach(t => { if(myData.x === t.x && myData.y === t.y) die(); });
             }
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
@@ -288,15 +290,18 @@
             });
         }
 
+        // ÇİZİM (Müdür kuyruğu kaldırıldı)
         function draw() {
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8); 
+            ctx.fillStyle = "#333"; ctx.fillRect(13*grid, 0, 4*grid, 8); // Kapı
             
+            // Sigaraları çiz
             foods.forEach(f => {
                 ctx.fillStyle = "#ecf0f1"; ctx.fillRect(f.x * grid + 2, f.y * grid + 7, 12, 6);
                 ctx.fillStyle = "#d35400"; ctx.fillRect(f.x * grid + 14, f.y * grid + 7, 4, 6);
             });
 
+            // Yılanları çiz
             Object.values(allPlayers).forEach(p => {
                 if(!p.tail || p.isDead) return;
                 p.tail.forEach((seg, i) => {
@@ -306,9 +311,11 @@
                 });
             });
 
+            // Sadece Müdür PNG'sini çiz
             if(bossData.active) {
-                ctx.fillStyle = "rgba(255,0,0,0.5)"; bossData.tail.forEach(t => ctx.fillRect(t.x*grid, t.y*grid, grid-1, grid-1));
-                if(bossImg.complete) ctx.drawImage(bossImg, (bossData.x - 2) * grid, (bossData.y - 2) * grid, grid * 5, grid * 5);
+                if(bossImg.complete) {
+                    ctx.drawImage(bossImg, (bossData.x - 2) * grid, (bossData.y - 2) * grid, grid * 5, grid * 5);
+                }
             }
         }
 
@@ -327,7 +334,7 @@
             if (bossInterval) clearInterval(bossInterval);
             document.getElementById("readyBtn").innerText = "HAZIR DEĞİL";
             document.getElementById("readyBtn").classList.remove("ready-on");
-            bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, tail: [], maxLength: 15, timer: 15, state: "waiting", stayTimer: 15 };
+            bossData = { active: false, x: 15, y: -6, dx: 0, dy: 1, timer: 15, state: "waiting", stayTimer: 15 };
             db.ref('players/' + myId).set(myData);
             gameStatus = "waiting";
         }
@@ -357,9 +364,9 @@
             });
         }
 
+        // KLAVYE GİRDİSİ (Yön kilidi aktif)
         document.addEventListener("keydown", e => {
             if(gameStatus !== "playing" || myData.isDead || !canChangeDirection) return;
-            
             if(e.key === "ArrowUp" && myData.dy !== 1) { myData.dx = 0; myData.dy = -1; canChangeDirection = false; }
             else if(e.key === "ArrowDown" && myData.dy !== -1) { myData.dx = 0; myData.dy = 1; canChangeDirection = false; }
             else if(e.key === "ArrowLeft" && myData.dx !== 1) { myData.dx = -1; myData.dy = 0; canChangeDirection = false; }
